@@ -180,6 +180,28 @@ inline VEC_T mix(const T& a, const T& b, typename T::value_type p)
     return t;
 }
 
+template<typename T>
+inline VEC_T ceil(const T& a)
+{
+    T t;
+    for (auto i = 0; i < T::num_components; ++i)
+    {
+        t[i] = ceil(a[i]);
+    }
+    return t;
+}
+
+template<typename T>
+inline VEC_T floor(const T& a)
+{
+    T t;
+    for (auto i = 0; i < T::num_components; ++i)
+    {
+        t[i] = floor(a[i]);
+    }
+    return t;
+}
+
 inline osg::Vec3 hsv2rgb(const osg::Vec3& c)
 {
     auto x6 = c.x() * 6.0f;
@@ -389,6 +411,9 @@ inline T createMatrixMinor(
               0,        0,        0,        1);
     // clang-format on
 }
+
+std::vector<osg::Vec2> poissonDiskSample(
+    const osg::Vec2& minExt, const osg::Vec2& maxExt, float radius, int k);
 
 }  // namespace toy
 

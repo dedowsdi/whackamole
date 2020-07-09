@@ -50,6 +50,7 @@ set(SRC
     src/DB.cpp
     src/DebugHandler.cpp
     src/Game.cpp
+    src/BaseGame.cpp
     src/main.cpp
     src/Math.cpp
     src/OsgFactory.cpp

@@ -1,151 +1,179 @@
 #include <Game.h>
 
-#include <cassert>
-
 #include <osg/AnimationPath>
-#include <osg/Billboard>
-#include <osg/BlendFunc>
-#include <osg/ClipPlane>
-#include <osg/Hint>
-#include <osg/LightModel>
-#include <osg/LineWidth>
-#include <osg/Material>
+#include <osg/Camera>
+#include <osg/ComputeBoundsVisitor>
+#include <osg/MatrixTransform>
+#include <osg/ShapeDrawable>
 #include <osgDB/ReadFile>
-#include <osgShadow/ShadowMap>
-#include <osgShadow/ShadowedScene>
-#include <osgViewer/Viewer>
-
-#include <ALBuffer.h>
-#include <ALContext.h>
-#include <ALListener.h>
-#include <ALSource.h>
+#include <osgGA/GUIEventHandler>
 #include <Math.h>
 #include <OsgFactory.h>
-#include <OsgQuery.h>
 
 namespace toy
 {
 
-void Game::clear() {}
+const int burrows = 8;
+const float sceneRadius = 100;
+const float lawnHeight = 2.0f;
+const float burrowRadius = 6.0f;
+const float burrowHeight = 0.1f;
+const float burrowOffset = 0.1f;
 
-void Game::init(int argc, char* argv[], osgViewer::Viewer* viewer)
+class MoleEventHandler : public osgGA::GUIEventHandler
 {
-    _viewer = viewer;
-    _viewer->realize();
+public:
+    MoleEventHandler(osg::Node* mole) : _mole(mole) {}
 
-    createScene();
-    _viewer->setSceneData(_root);
-
-    createSound(argc, argv);
-}
-
-osg::Vec2i Game::getWindowSize()
-{
-    auto rect = osgq::getWindowRect(*_viewer);
-    return osg::Vec2i(rect.z(), rect.w());
-}
-
-osg::Vec2 Game::getWindowCenter()
-{
-    auto size = getWindowSize();
-    return osg::Vec2(size.x() * 0.5f, size.y() * 0.5f);
-}
-
-void Game::debugDrawLine(const osg::Vec3& from, const osg::Vec3& to,
-    const osg::Vec4& fromColor, const osg::Vec4& toColor)
-{
-    if (!_debugLines)
+    virtual bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
     {
-        _debugLines = new osg::Geometry;
-        auto vertices = new osg::Vec3Array(osg::Array::BIND_PER_VERTEX);
-        auto colors = new osg::Vec4Array(osg::Array::BIND_PER_VERTEX);
-        _debugLines->setVertexArray(vertices);
-        _debugLines->setColorArray(colors);
-        _debugLines->setDataVariance(osg::Object::DYNAMIC);
-
-        _debugLines->setName("Game#DebugLines");
-        _debugLines->setUseDisplayList(false);
-        _debugLines->setUseVertexBufferObjects(true);
-        _debugLines->addPrimitiveSet(new osg::DrawArrays(GL_LINES, 0, 0));
-
-        _debugRoot->addChild(_debugLines);
+        switch (ea.getEventType())
+        {
+            case osgGA::GUIEventAdapter::KEYDOWN:
+                switch (ea.getKey())
+                {
+                    case osgGA::GUIEventAdapter::KEY_F1:
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                break;
+        }
+        return false;  // return true will stop event
     }
 
-    auto vertices = static_cast<osg::Vec3Array*>(_debugLines->getVertexArray());
-    auto colors = static_cast<osg::Vec4Array*>(_debugLines->getColorArray());
-    vertices->push_back(from);
-    vertices->push_back(to);
-    colors->push_back(fromColor);
-    colors->push_back(toColor);
+private:
+    osg::Node* _mole;
+};
 
-    vertices->dirty();
-    colors->dirty();
-
-    static_cast<osg::DrawArrays*>(_debugLines->getPrimitiveSet(0))
-        ->setCount(vertices->size());
-    _debugLines->dirtyBound();
-}
-
-void Game::debugDrawSphere(const osg::Vec3& pos, float radius, const osg::Vec4& color)
+bool Game::run(osg::Object* object, osg::Object* data)
 {
-    _debugRoot->addChild(osgf::createSphereAt(pos, radius, color));
+    auto newMole = toy::unitRand() > 0.99;
+    if (newMole)
+    {
+        popMole();
+    }
+
+    return traverse(object, data);
 }
-
-osg::Camera* Game::getMainCamera() const
-{
-    return _viewer->getCamera();
-}
-
-void Game::setALListener(ALListener* v)
-{
-    _alListener = v;
-}
-
-Game::Game() {}
-
-Game::~Game() {}
 
 void Game::createScene()
 {
-    createRoots();
+    _mole = osgDB::readNodeFile("model/mole.osgt");
+    osg::ComputeBoundsVisitor cbv;
+    _mole->accept(cbv);
+    _moleBB = cbv.getBoundingBox();
+
+    _sceneRoot->addChild(createLawn());
+    createBurrows();
+
+    _hudCamera->addChild(createUI());
+    _root->addUpdateCallback(this);
 }
 
-void Game::createSound(int argc, char* argv[])
+void Game::popMole()
 {
-    _alContext.reset(new ALContext(argc, argv));
-    _alListener = new ALListener;
+    // choose inactive burrow
+    std::vector<int> indices;
+    for (auto& burrow: _burrowList)
+    {
+        if (!burrow.active)
+        {
+            indices.push_back(burrow.index);
+        }
+    }
 
-    // make sure listener is not updated before sources
-    auto listenerUpdater = new ALListenerUpdater(_alListener);
-    _sceneRoot2->addUpdateCallback(listenerUpdater);
+    if (indices.empty())
+    {
+        return;
+    }
 
-    OSG_NOTICE << "OpenAL init finished.\n" << std::string(80, '*') << std::endl;
+    auto index = static_cast<int>(toy::unitRand() * indices.size());
+    auto& burrow = _burrowList[index];
+
+    // pop mole, play animation
+    auto startPos = burrow.pos;
+    startPos.z() -= _moleBB.zMax();
+    auto endPos = burrow.pos;
+    endPos.z() -= _moleBB.zMin();
+
+    auto mole = new osg::MatrixTransform;
+    mole->setMatrix(osg::Matrix::translate(startPos));
+    mole->addChild(_mole);
+    mole->setEventCallback(new MoleEventHandler(mole));
+    mole->addUpdateCallback(osgf::createTimerUpdateCallback(
+        2, [=](osg::Object* object, osg::Object* data) -> void {
+            sgg.hideMole(static_cast<osg::Node*>(object));
+        }));
+    mole->setUserValue("Burrow", index);
+
+    auto animPath = new osg::AnimationPath;
+    animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
+    osgf::addControlPoints(
+        *animPath, 2, 0, 1, mole->getMatrix(), osg::Matrix::translate(endPos));
+    osgf::addControlPoints(
+        *animPath, 2, 0, 1, osg::Matrix::translate(endPos), mole->getMatrix(), false);
+
+    auto apc = new osg::AnimationPathCallback;
+    apc->setAnimationPath(animPath);
+    mole->setUpdateCallback(apc);
+
+    sgg.getSceneRoot()->addChild(mole);
 }
 
-void Game::createRoots()
+void Game::kickMole(osg::Node* mole) {}
+
+void Game::hideMole(osg::Node* mole) {}
+
+osg::Node* Game::createLawn()
 {
-    _root = new osg::Group();
-    _root->setName("Game");
+    auto lawn = new osg::Group;
 
-    _debugRoot = new osg::Group();
-    _debugRoot->setName("DebugRoot");
+    auto ground = new osg::ShapeDrawable(
+        new osg::Box(osg::Vec3(), sceneRadius * 2, sceneRadius * 2, lawnHeight));
+    lawn->addChild(ground);
 
-    _root->addChild(_debugRoot);
+    return lawn;
+}
 
-    _sceneRoot = new osg::Group();
-    _sceneRoot->setName("SceneRoot");
+void Game::createBurrows()
+{
+    std::vector<osg::Vec3> posList;
+    auto maxCenter = sceneRadius - burrowRadius;
+    for (auto i = 0; i < burrows; ++i)
+    {
+        auto pos = osg::Vec3(toy::diskRand(maxCenter), lawnHeight * 0.5 + burrowOffset);
+        auto burrow = createBurrow(pos);
+        burrow.index = i;
+        _sceneRoot->addChild(burrow.node);
+        _burrowList.push_back(burrow);
+    }
+}
 
-    _root->addChild(_sceneRoot);
+Burrow Game::createBurrow(const osg::Vec3& pos)
+{
+    static osg::ref_ptr<osg::ShapeDrawable> graph;
+    if (!graph)
+    {
+        graph = new osg::ShapeDrawable(
+            new osg::Cylinder(osg::Vec3(), burrowRadius, burrowHeight));
+        graph->setColor(osg::Vec4(0.2f, 0.2f, 0.2f, 0.2f));
 
-    _sceneRoot2 = new osg::Group();
-    _sceneRoot2->setName("SceneRoot2");
+        auto ss = graph->getOrCreateStateSet();
+        ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    }
 
-    _root->addChild(_sceneRoot2);
+    auto frame = new osg::MatrixTransform;
+    frame->setMatrix(osg::Matrix::translate(pos));
+    frame->addChild(graph);
+    return Burrow{false, -1, pos, frame};
+}
 
-    auto rect = osgq::getWindowRect(*_viewer);
-
-    _hudCamera = osgf::createOrthoCamera(rect.x(), rect.y(), rect.z(), rect.w());
-    _root->addChild(_hudCamera);
+osg::Node* Game::createUI()
+{
+    return new osg::Group;
 }
 
 }  // namespace toy

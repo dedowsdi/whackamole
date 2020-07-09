@@ -1,0 +1,14 @@
+#Ascii Scene 
+#Version 161 
+#Generator OpenSceneGraph 3.6.5 
+
+osg::ShapeDrawable {
+  UniqueID 1 
+  Shape TRUE {
+    osg::Sphere {
+      UniqueID 2 
+      Radius 6 
+    }
+  }
+  Color 1 1 1 1 
+}
