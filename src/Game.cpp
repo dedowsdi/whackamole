@@ -1,5 +1,7 @@
 #include <Game.h>
 
+#include <cassert>
+
 #include <osg/AnimationPath>
 #include <osg/Camera>
 #include <osg/ComputeBoundsVisitor>
@@ -7,6 +9,7 @@
 #include <osg/ShapeDrawable>
 #include <osgDB/ReadFile>
 #include <osgGA/GUIEventHandler>
+#include <osgViewer/Viewer>
 #include <Math.h>
 #include <OsgFactory.h>
 
@@ -20,24 +23,39 @@ const float burrowRadius = 6.0f;
 const float burrowHeight = 0.1f;
 const float burrowOffset = 0.1f;
 
-class MoleEventHandler : public osgGA::GUIEventHandler
+class GameEventHandler : public osgGA::GUIEventHandler
 {
 public:
-    MoleEventHandler(osg::Node* mole) : _mole(mole) {}
+    GameEventHandler() {}
 
     virtual bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
     {
         switch (ea.getEventType())
         {
-            case osgGA::GUIEventAdapter::KEYDOWN:
-                switch (ea.getKey())
+            case osgGA::GUIEventAdapter::PUSH:
+                switch (ea.getButton())
                 {
-                    case osgGA::GUIEventAdapter::KEY_F1:
-                        break;
+                    case osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON:
+                    {
+                        auto mole = getCursorMole(ea);
+                        if (mole)
+                        {
+                            sgg.kickMole(mole);
+                        }
+                    }
+                    break;
                     default:
                         break;
                 }
                 break;
+
+            case osgGA::GUIEventAdapter::MOVE:
+            {
+                // outline
+                sgg.highLightMole(getCursorMole(ea));
+            }
+            break;
+
             default:
                 break;
         }
@@ -45,8 +63,49 @@ public:
     }
 
 private:
-    osg::Node* _mole;
+    Mole* getCursorMole(const osgGA::GUIEventAdapter& ea)
+    {
+        osgUtil::LineSegmentIntersector::Intersections iss;
+        if (!sgg.getViewer()->computeIntersections(ea, iss))
+            return 0;
+
+        auto& np = iss.begin()->nodePath;
+        auto iter = std::find_if(np.begin(), np.end(), [](osg::Node* node) -> bool {
+            return node->getName().find_first_of("Mole") == 0 && dynamic_cast<Mole*>(node);
+        });
+
+        return iter == np.end() ? 0 : static_cast<Mole*>(*iter);
+    }
 };
+
+osg::ref_ptr<osg::Node> Mole::_drawable;
+osg::BoundingBox Mole::_boundingbox;
+
+Mole::Mole(Burrow* burrow) : _burrow(burrow)
+{
+    addChild(getDrawable());
+}
+
+const osg::BoundingBox& Mole::getDrawableBoundingBox()
+{
+    if (!_boundingbox.valid())
+    {
+        auto node = getDrawable();
+        osg::ComputeBoundsVisitor visitor;
+        node->accept(visitor);
+        _boundingbox = visitor.getBoundingBox();
+    }
+    return _boundingbox;
+}
+
+osg::Node* Mole::getDrawable()
+{
+    if (!_drawable)
+    {
+        _drawable = osgDB::readNodeFile("model/mole.osgt");
+    }
+    return _drawable;
+}
 
 bool Game::run(osg::Object* object, osg::Object* data)
 {
@@ -61,20 +120,18 @@ bool Game::run(osg::Object* object, osg::Object* data)
 
 void Game::createScene()
 {
-    _mole = osgDB::readNodeFile("model/mole.osgt");
-    osg::ComputeBoundsVisitor cbv;
-    _mole->accept(cbv);
-    _moleBB = cbv.getBoundingBox();
-
     _sceneRoot->addChild(createLawn());
     createBurrows();
 
     _hudCamera->addChild(createUI());
     _root->addUpdateCallback(this);
+    _root->addEventCallback(new GameEventHandler);
 }
 
 void Game::popMole()
 {
+    static auto moleIndex = 0;
+
     // choose inactive burrow
     std::vector<int> indices;
     for (auto& burrow: _burrowList)
@@ -95,37 +152,67 @@ void Game::popMole()
 
     // pop mole, play animation
     auto startPos = burrow.pos;
-    startPos.z() -= _moleBB.zMax();
+    startPos.z() -= Mole::getDrawableBoundingBox().zMax();
     auto endPos = burrow.pos;
-    endPos.z() -= _moleBB.zMin();
+    endPos.z() -= Mole::getDrawableBoundingBox().zMin();
 
-    auto mole = new osg::MatrixTransform;
+    auto mole = new Mole(&burrow);
+    mole->setName("Mole" + std::to_string(moleIndex++));
     mole->setMatrix(osg::Matrix::translate(startPos));
-    mole->addChild(_mole);
-    mole->setEventCallback(new MoleEventHandler(mole));
-    mole->addUpdateCallback(osgf::createTimerUpdateCallback(
-        2, [=](osg::Object* object, osg::Object* data) -> void {
-            sgg.hideMole(static_cast<osg::Node*>(object));
-        }));
-    mole->setUserValue("Burrow", index);
+    _root->addUpdateCallback(osgf::createTimerUpdateCallback(
+        8, [=](osg::Object* object, osg::Object* data) -> void { sgg.removeMole(mole); }));
 
     auto animPath = new osg::AnimationPath;
     animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
     osgf::addControlPoints(
         *animPath, 2, 0, 1, mole->getMatrix(), osg::Matrix::translate(endPos));
     osgf::addControlPoints(
-        *animPath, 2, 0, 1, osg::Matrix::translate(endPos), mole->getMatrix(), false);
+        *animPath, 2, 1, 2, osg::Matrix::translate(endPos), mole->getMatrix(), false);
 
     auto apc = new osg::AnimationPathCallback;
     apc->setAnimationPath(animPath);
     mole->setUpdateCallback(apc);
 
-    sgg.getSceneRoot()->addChild(mole);
+    _sceneRoot->addChild(mole);
 }
 
-void Game::kickMole(osg::Node* mole) {}
+void Game::kickMole(Mole* mole)
+{
+    assert(mole->getNumParents() == 1);
 
-void Game::hideMole(osg::Node* mole) {}
+    mole->setKicked(true);
+    mole->getBurrow()->active = false;
+
+    // kick it away
+    auto translation =
+        sphericalRand(200, osg::Vec2(0, osg::PI_2 * 0.8), osg::Vec2(0, 2 * osg::PI));
+    auto targetMatrix = mole->getMatrix();
+    targetMatrix.preMultTranslate(translation);
+    auto duration = 2;
+
+    auto animPath = new osg::AnimationPath;
+    animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
+    osgf::addControlPoints(*animPath, 1, 0, duration, mole->getMatrix(), targetMatrix);
+
+    auto apc = new osg::AnimationPathCallback;
+    apc->setAnimationPath(animPath);
+
+    mole->setUpdateCallback(apc);
+
+    OSG_NOTICE << "Kick " << mole->getName() << std::endl;
+}
+
+void Game::removeMole(Mole* mole)
+{
+    assert(mole->getNumParents() == 1);
+    if (!mole->getKicked())
+    {
+        mole->getBurrow()->active = false;
+    }
+    mole->getParent(0)->removeChild(mole);
+}
+
+void Game::highLightMole(Mole* mole) {}
 
 osg::Node* Game::createLawn()
 {

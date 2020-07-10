@@ -5,7 +5,13 @@
 #include <osg/BoundingBox>
 #include <osg/Callback>
 #include <osg/Referenced>
+#include <osg/MatrixTransform>
 #include <BaseGame.h>
+
+namespace osg
+{
+class MatrixTransform;
+}
 
 namespace toy
 {
@@ -18,6 +24,28 @@ struct Burrow
     int index = -1;
     osg::Vec3 pos = osg::Vec3();
     osg::Node* node;
+};
+
+class Mole : public osg::MatrixTransform
+{
+public:
+    Mole(Burrow* burrow);
+
+    Burrow* getBurrow() const { return _burrow; }
+    void setBurrow(Burrow* v) { _burrow = v; }
+
+    bool getKicked() const { return _kicked; }
+    void setKicked(bool v) { _kicked = v; }
+
+    static const osg::BoundingBox& getDrawableBoundingBox();
+    static osg::Node* getDrawable();
+
+private:
+    static osg::ref_ptr<osg::Node> _drawable;
+    static osg::BoundingBox _boundingbox;
+
+    bool _kicked = false;
+    Burrow* _burrow = 0;
 };
 
 class Game
@@ -40,9 +68,13 @@ public:
 
     void popMole();
 
-    void kickMole(osg::Node* mole);
+    void kickMole(Mole* mole);
 
-    void hideMole(osg::Node* mole);
+    void removeMole(Mole* mole);
+
+    void highLightMole(Mole* mole);
+
+    void deactivateBurrow(Mole* mole);
 
 private:
     osg::Node* createLawn();
@@ -56,8 +88,6 @@ private:
     Game() = default;
     ~Game() = default;
 
-    osg::ref_ptr<osg::Node> _mole;
-    osg::BoundingBox _moleBB;
     std::vector<Burrow> _burrowList;
 };
 

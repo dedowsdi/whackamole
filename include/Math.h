@@ -251,6 +251,20 @@ inline osg::Vec3 sphericalRand(float radius)
     return osg::Vec3(sinTheta * cos(phi), sinTheta * sin(phi), cos(theta)) * radius;
 }
 
+inline osg::Vec3 sphericalRand(
+    float radius, const osg::Vec2& thetaRange, const osg::Vec2& phiRange)
+{
+    auto theta = acos(linearRand(-1.0f, 1.0f));
+    auto p = theta / osg::PI;
+    theta = thetaRange.x() * (1 - p) + thetaRange.y() * p;
+
+    p = unitRand();
+    auto phi = phiRange.x() * (1 - p ) + phiRange.y() * p;
+
+    auto sinTheta = sin(theta);
+    return osg::Vec3(sinTheta * cos(phi), sinTheta * sin(phi), cos(theta)) * radius;
+}
+
 inline osg::Vec3 ballRand(float radius)
 {
     return sphericalRand(radius) * linearRand(0.0f, 1.0f);
