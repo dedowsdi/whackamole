@@ -4,6 +4,7 @@
 
 osg::ShapeDrawable {
   UniqueID 1 
+  Name "Mole"
   Shape TRUE {
     osg::Sphere {
       UniqueID 2 

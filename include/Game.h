@@ -6,6 +6,7 @@
 #include <osg/Callback>
 #include <osg/Referenced>
 #include <osg/MatrixTransform>
+#include <osgText/Text>
 #include <BaseGame.h>
 
 namespace osg
@@ -37,6 +38,9 @@ public:
     bool getKicked() const { return _kicked; }
     void setKicked(bool v) { _kicked = v; }
 
+    int getScore() const { return _score; }
+    void setScore(int v) { _score = v; }
+
     static const osg::BoundingBox& getDrawableBoundingBox();
     static osg::Node* getDrawable();
 
@@ -45,6 +49,7 @@ private:
     static osg::BoundingBox _boundingbox;
 
     bool _kicked = false;
+    int _score = 100;
     Burrow* _burrow = 0;
 };
 
@@ -74,7 +79,7 @@ public:
 
     void highLightMole(Mole* mole);
 
-    void deactivateBurrow(Mole* mole);
+    void updateScore(const osg::Vec3& pos, int score);
 
 private:
     osg::Node* createLawn();
@@ -88,6 +93,8 @@ private:
     Game() = default;
     ~Game() = default;
 
+    int _score;
+    osg::ref_ptr<osgText::Text> _scoreText;
     std::vector<Burrow> _burrowList;
 };
 

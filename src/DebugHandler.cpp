@@ -54,6 +54,7 @@ void RenderStagePrinter::drawImplementation(
     if (_enabled)
     {
         auto stage = dynamic_cast<osgUtil::RenderStage*>(bin);
+        _renderInfo = &renderInfo;
         if (stage)
         {
             _out << std::string(60, '-') << "\n";
@@ -136,11 +137,15 @@ void RenderStagePrinter::printRenderBin(const osgUtil::RenderBin* bin)
         printLeaves(fineGrained);
     }
 
-    _out << "coarse grained :\n";
-    for (auto graph: bin->getStateGraphList())
+    if (!bin->getStateGraphList().empty())
     {
-        _out << "StageGraph : " << graph << "\n";
-        printLeaves(graph->_leaves);
+        _out << "coarse grained :\n";
+        for (auto graph: bin->getStateGraphList())
+        {
+            _out << "StageGraph : " << graph << ", StateSet : " << graph->getStateSet()
+                 << "\n";
+            printLeaves(graph->_leaves);
+        }
     }
 
     // print child bins with binNum >0

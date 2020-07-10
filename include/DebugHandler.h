@@ -55,13 +55,15 @@ private:
         for (const auto leaf: leaves)
         {
             auto drawable = leaf->getDrawable();
-            _out << "    " << drawable << " \"" << drawable->getName() << " "
-                 << (leaf->_dynamic ? "DYNAMIC" : "STATIC") << "\n";
+            _out << "    " << drawable << " \"" << drawable->getName() << "\" "
+                 << (leaf->_dynamic ? "DYNAMIC" : "STATIC") << " "
+                 << drawable->getDisplayList(_renderInfo->getContextID()) << "\n";
         }
     }
 
     mutable bool _enabled = false;
     std::ostream& _out;
+    const osg::RenderInfo* _renderInfo = 0;
 
     RenderStageStack _stages;
     RenderBinStack _bins;

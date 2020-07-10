@@ -199,6 +199,8 @@ void Game::kickMole(Mole* mole)
 
     mole->setUpdateCallback(apc);
 
+    updateScore(mole->getMatrix().getTrans(), mole->getScore());
+
     OSG_NOTICE << "Kick " << mole->getName() << std::endl;
 }
 
@@ -214,12 +216,20 @@ void Game::removeMole(Mole* mole)
 
 void Game::highLightMole(Mole* mole) {}
 
+void Game::updateScore(const osg::Vec3& pos, int score)
+{
+    _score += score;
+    _scoreText->setText(std::to_string(_score));
+}
+
 osg::Node* Game::createLawn()
 {
     auto lawn = new osg::Group;
+    lawn->setName("Lawn");
 
     auto ground = new osg::ShapeDrawable(
         new osg::Box(osg::Vec3(), sceneRadius * 2, sceneRadius * 2, lawnHeight));
+    ground->setName("Ground");
     lawn->addChild(ground);
 
     return lawn;
@@ -246,6 +256,7 @@ Burrow Game::createBurrow(const osg::Vec3& pos)
     {
         graph = new osg::ShapeDrawable(
             new osg::Cylinder(osg::Vec3(), burrowRadius, burrowHeight));
+        graph->setName("Burrow");
         graph->setColor(osg::Vec4(0.2f, 0.2f, 0.2f, 0.2f));
 
         auto ss = graph->getOrCreateStateSet();
@@ -260,7 +271,25 @@ Burrow Game::createBurrow(const osg::Vec3& pos)
 
 osg::Node* Game::createUI()
 {
-    return new osg::Group;
+    _scoreText = new osgText::Text;
+    _scoreText->setName("Score");
+    _scoreText->setDataVariance(osg::Object::DYNAMIC);
+    _scoreText->setFont(osgText::readFontFile("fonts/arial.ttf"));
+    _scoreText->setCharacterSize(50);
+    _scoreText->setAxisAlignment(osgText::TextBase::XY_PLANE);
+    _scoreText->setPosition(osg::Vec3(20, 20, 0));
+    _scoreText->setFontResolution(50, 50);
+    _scoreText->setText("0");
+    _score = 0;
+
+    auto root = new osg::Group;
+    root->addChild(_scoreText);
+
+    auto ss = root->getOrCreateStateSet();
+    ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+
+    return root;
 }
 
 }  // namespace toy

@@ -140,7 +140,8 @@ void BaseGame::createRoots()
 
     auto rect = osgq::getWindowRect(*_viewer);
 
-    _hudCamera = osgf::createOrthoCamera(rect.x(), rect.y(), rect.z(), rect.w());
+    _hudCamera = osgf::createOrthoCamera(0, rect.z(), 0, rect.w());
+    _hudCamera->setName("Hud");
     _root->addChild(_hudCamera);
 }
 
