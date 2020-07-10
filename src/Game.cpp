@@ -49,12 +49,13 @@ public:
                 }
                 break;
 
+            case osgGA::GUIEventAdapter::KEYDOWN:
+                sgg.restart();
+                break;
+
             case osgGA::GUIEventAdapter::MOVE:
-            {
-                // outline
                 sgg.highLightMole(getCursorMole(ea));
-            }
-            break;
+                break;
 
             default:
                 break;
@@ -109,10 +110,26 @@ osg::Node* Mole::getDrawable()
 
 bool Game::run(osg::Object* object, osg::Object* data)
 {
-    auto newMole = toy::unitRand() > 0.99;
-    if (newMole)
+    auto visitor = data->asNodeVisitor();
+    auto t0 = visitor->getFrameStamp()->getReferenceTime();
+    auto deltaTime = _lastTime == 0 ? 0 : t0 - _lastTime;
+    _lastTime = t0;
+
+    if (_status == gs_running)
     {
-        popMole();
+        auto newMole = toy::unitRand() > 0.99;
+        if (newMole)
+        {
+            popMole();
+        }
+
+        _timer -= deltaTime;
+        _timerText->setText(std::to_string(_timer));
+
+        if (_timer <= 0)
+        {
+            timeout();
+        }
     }
 
     return traverse(object, data);
@@ -120,9 +137,6 @@ bool Game::run(osg::Object* object, osg::Object* data)
 
 void Game::createScene()
 {
-    _sceneRoot->addChild(createLawn());
-    createBurrows();
-
     _hudCamera->addChild(createUI());
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
@@ -222,6 +236,36 @@ void Game::updateScore(const osg::Vec3& pos, int score)
     _scoreText->setText(std::to_string(_score));
 }
 
+void Game::restart()
+{
+    _score = 0;
+    _scoreText->setText("0");
+
+    _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
+    _sceneRoot->addChild(createLawn());
+
+    _burrowList.clear();
+    createBurrows();
+
+    _msg->setNodeMask(0);
+    _timer = 30;
+    _timerText->setNodeMask(-1);
+    _timerText->setText(std::to_string(_timer));
+
+    _status = gs_running;
+
+    _viewer->getCameraManipulator()->home(0);
+}
+
+void Game::timeout()
+{
+    _msg->setNodeMask(-1);
+    _msg->setText("Press any key to restart");
+
+    _timerText->setNodeMask(0);
+    _status = gs_timeout;
+}
+
 osg::Node* Game::createLawn()
 {
     auto lawn = new osg::Group;
@@ -269,25 +313,39 @@ Burrow Game::createBurrow(const osg::Vec3& pos)
     return Burrow{false, -1, pos, frame};
 }
 
+osgText::Text* createText(
+    const std::string& name, const std::string& text, int size, const osg::Vec3& pos)
+{
+    static auto font = osgText::readFontFile("fonts/arial.ttf");
+
+    auto t = new osgText::Text;
+    t->setName(name);
+    t->setDataVariance(osg::Object::DYNAMIC);
+    t->setFont(font);
+    t->setCharacterSize(size);
+    t->setAxisAlignment(osgText::TextBase::XY_PLANE);
+    t->setPosition(pos);
+    t->setText(text);
+    return t;
+}
+
 osg::Node* Game::createUI()
 {
-    _scoreText = new osgText::Text;
-    _scoreText->setName("Score");
-    _scoreText->setDataVariance(osg::Object::DYNAMIC);
-    _scoreText->setFont(osgText::readFontFile("fonts/arial.ttf"));
-    _scoreText->setCharacterSize(50);
-    _scoreText->setAxisAlignment(osgText::TextBase::XY_PLANE);
-    _scoreText->setPosition(osg::Vec3(20, 20, 0));
-    _scoreText->setFontResolution(50, 50);
-    _scoreText->setText("0");
+    _scoreText = createText("Score", "0", 50, osg::Vec3(20, 20, 0));
     _score = 0;
+
+    _msg = createText("Msg", "Press any key to start game.", 20, osg::Vec3(128, 20, 0));
+    _timerText = createText("Timer", "30", 20, osg::Vec3(156, 20, 0));
 
     auto root = new osg::Group;
     root->addChild(_scoreText);
+    root->addChild(_msg);
+    root->addChild(_timerText);
+
+    _timerText->setNodeMask(0);
 
     auto ss = root->getOrCreateStateSet();
     ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
 
     return root;
 }

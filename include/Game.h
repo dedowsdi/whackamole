@@ -4,8 +4,8 @@
 #include <iostream>
 #include <osg/BoundingBox>
 #include <osg/Callback>
-#include <osg/Referenced>
 #include <osg/MatrixTransform>
+#include <osg/Referenced>
 #include <osgText/Text>
 #include <BaseGame.h>
 
@@ -67,6 +67,13 @@ public:
         return *instance;
     }
 
+    enum game_status
+    {
+        gs_init,
+        gs_running,
+        gs_timeout
+    };
+
     bool run(osg::Object* object, osg::Object* data) override;
 
     void createScene() override;
@@ -81,6 +88,13 @@ public:
 
     void updateScore(const osg::Vec3& pos, int score);
 
+    void restart();
+
+    void timeout();
+
+    game_status getStatus() const { return _status; }
+    void setStatus(game_status v) { _status = v; }
+
 private:
     osg::Node* createLawn();
 
@@ -93,8 +107,13 @@ private:
     Game() = default;
     ~Game() = default;
 
-    int _score;
+    int _score = 0;
+    float _lastTime = 0;
+    float _timer = 30;
+    game_status _status = gs_init;
     osg::ref_ptr<osgText::Text> _scoreText;
+    osg::ref_ptr<osgText::Text> _msg;
+    osg::ref_ptr<osgText::Text> _timerText;
     std::vector<Burrow> _burrowList;
 };
 
