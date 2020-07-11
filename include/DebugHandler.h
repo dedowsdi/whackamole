@@ -49,17 +49,7 @@ private:
 
     void printPath();
 
-    template<typename T>
-    void printLeaves(const T& leaves) const
-    {
-        for (const auto leaf: leaves)
-        {
-            auto drawable = leaf->getDrawable();
-            _out << "    " << drawable << " \"" << drawable->getName() << "\" "
-                 << (leaf->_dynamic ? "DYNAMIC" : "STATIC") << " "
-                 << drawable->getDisplayList(_renderInfo->getContextID()) << "\n";
-        }
-    }
+    void printStateset(const osg::StateSet* ss);
 
     mutable bool _enabled = false;
     std::ostream& _out;
