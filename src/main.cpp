@@ -21,6 +21,8 @@
 #include <osgGA/StateSetManipulator>
 #include <osgViewer/Viewer>
 #include <osgViewer/ViewerEventHandlers>
+#include <osg/os_utils>
+#include <osgGA/TrackballManipulator>
 
 #include <ALContext.h>
 #include <ALListener.h>
@@ -30,6 +32,7 @@
 #include <Game.h>
 #include <Math.h>
 #include <OsgFactory.h>
+#include <ToyViewer.h>
 
 int main(int argc, char* argv[])
 {
@@ -40,7 +43,7 @@ int main(int argc, char* argv[])
     options->setObjectCacheHint(osgDB::Options::CACHE_ALL);
     osgDB::Registry::instance()->setOptions(options);
 
-    osgViewer::Viewer viewer;
+    toy::ToyViewer viewer;
     sgg.init(argc, argv, &viewer);
 
     auto camera = viewer.getCamera();
@@ -62,6 +65,7 @@ int main(int argc, char* argv[])
     statsHandler->setKeyEventTogglesOnScreenStats(osgGA::GUIEventAdapter::KEY_F1);
 
     viewer.addEventHandler(statsHandler);
+    viewer.addEventHandler(new toy::ViewerDebugHandler(&viewer));
 
     auto statesetHandler =
         new osgGA::StateSetManipulator(sgg.getRoot()->getOrCreateStateSet());

@@ -42,22 +42,25 @@ include_directories(
     )
 
 set(SRC
+    src/AL.cpp
     src/ALBuffer.cpp
     src/ALContext.cpp
-    src/AL.cpp
     src/ALListener.cpp
     src/ALSource.cpp
+    src/BaseGame.cpp
     src/DB.cpp
     src/DebugHandler.cpp
     src/Game.cpp
-    src/BaseGame.cpp
-    src/main.cpp
+    src/Lightning.cpp
     src/Math.cpp
     src/OsgFactory.cpp
     src/OsgQuery.cpp
     src/ReaderWriterAL.cpp
+    src/Resource.cpp
     src/SoundObjectManager.cpp
     src/ToyCopyOp.cpp
+    src/ToyViewer.cpp
+    src/main.cpp
     )
 
 add_executable(whackamole ${SRC})
