@@ -42,6 +42,7 @@ class ALBuffer;
 class ALSource;
 class ALContext;
 class ALListener;
+class ResourceObserver;
 
 class BaseGame
 {
@@ -64,6 +65,15 @@ public:
     osg::Vec2i getWindowSize();
 
     osg::Vec2 getWindowCenter();
+
+    // Create program and update it if ctime of shader file changed
+    osg::Program* createProgram(const std::string& fragFile);
+
+    osg::Program* createProgram(const std::string& vertFile, const std::string& fragFile);
+
+    osg::Program* createProgram(const std::string& vertFile, const std::string& geomFile,
+        const std::string& fragFile, int inputType, int outputType, int maxVertices);
+
 
     void debugDrawLine(const osg::Vec3& from, const osg::Vec3& to,
         const osg::Vec4& fromColor, const osg::Vec4& toColor);
@@ -109,6 +119,8 @@ protected:
     osg::ref_ptr<osg::Geometry> _debugLines;
 
     osg::ref_ptr<ALListener> _alListener;
+
+    osg::ref_ptr<ResourceObserver> _observer;
 };
 
 }  // namespace toy

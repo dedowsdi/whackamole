@@ -22,6 +22,7 @@
 #include <Math.h>
 #include <OsgFactory.h>
 #include <OsgQuery.h>
+#include <Resource.h>
 
 namespace toy
 {
@@ -50,6 +51,64 @@ osg::Vec2 BaseGame::getWindowCenter()
 {
     auto size = getWindowSize();
     return osg::Vec2(size.x() * 0.5f, size.y() * 0.5f);
+}
+
+osg::Program* BaseGame::createProgram(const std::string& fragFile)
+{
+    auto prg = new osg::Program;
+
+    auto fragShader = osgDB::readShaderFile(osg::Shader::FRAGMENT, fragFile);
+    prg->addShader(fragShader);
+
+#ifdef DEBUG
+    _observer->addResource(createShaderResource(fragShader));
+#endif /* ifndef DEBUG */
+
+    return prg;
+}
+
+osg::Program* BaseGame::createProgram(const std::string& vertFile, const std::string& fragFile)
+{
+    auto prg = new osg::Program;
+
+    auto vertShader = osgDB::readShaderFile(osg::Shader::VERTEX, vertFile);
+    prg->addShader(vertShader);
+
+    auto fragShader = osgDB::readShaderFile(osg::Shader::FRAGMENT, fragFile);
+    prg->addShader(fragShader);
+
+#ifdef DEBUG
+    _observer->addResource(createShaderResource(vertShader));
+    _observer->addResource(createShaderResource(fragShader));
+#endif /* ifndef DEBUG */
+
+    return prg;
+}
+
+osg::Program* BaseGame::createProgram(const std::string& vertFile, const std::string& geomFile,
+    const std::string& fragFile, int inputType, int outputType, int maxVertices)
+{
+    auto prg = new osg::Program;
+    prg->setParameter(GL_GEOMETRY_INPUT_TYPE_EXT, inputType);
+    prg->setParameter(GL_GEOMETRY_OUTPUT_TYPE_EXT, outputType);
+    prg->setParameter(GL_GEOMETRY_VERTICES_OUT_EXT, maxVertices);
+
+    auto vertShader = osgDB::readShaderFile(osg::Shader::VERTEX, vertFile);
+    prg->addShader(vertShader);
+
+    auto geomShader = osgDB::readShaderFile(osg::Shader::GEOMETRY, geomFile);
+    prg->addShader(geomShader);
+
+    auto fragShader = osgDB::readShaderFile(osg::Shader::FRAGMENT, fragFile);
+    prg->addShader(fragShader);
+
+#ifdef DEBUG
+    _observer->addResource(createShaderResource(vertShader));
+    _observer->addResource(createShaderResource(fragShader));
+    _observer->addResource(createShaderResource(geomShader));
+#endif /* ifndef DEBUG */
+
+    return prg;
 }
 
 void BaseGame::debugDrawLine(const osg::Vec3& from, const osg::Vec3& to,
@@ -122,6 +181,11 @@ void BaseGame::createRoots()
 {
     _root = new osg::Group();
     _root->setName("BaseGame");
+
+#ifdef DEBUG
+    _observer = new ResourceObserver;
+    _root->addUpdateCallback(_observer);
+#endif /* ifndef DEBUG */
 
     _debugRoot = new osg::Group();
     _debugRoot->setName("DebugRoot");
