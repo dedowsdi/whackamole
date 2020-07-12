@@ -10,8 +10,11 @@
 #include <osgDB/ReadFile>
 #include <osgGA/GUIEventHandler>
 #include <osgViewer/Viewer>
+#include <osg/Material>
+#include <osg/Depth>
 #include <Math.h>
 #include <OsgFactory.h>
+#include <Lightning.h>
 
 namespace toy
 {
@@ -50,7 +53,10 @@ public:
                 break;
 
             case osgGA::GUIEventAdapter::KEYDOWN:
-                sgg.restart();
+                if (sgg.getStatus() == Game::gs_init || sgg.getStatus() == Game::gs_timeout)
+                {
+                    sgg.restart();
+                }
                 break;
 
             case osgGA::GUIEventAdapter::MOVE:
@@ -111,7 +117,7 @@ osg::Node* Mole::getDrawable()
 bool Game::run(osg::Object* object, osg::Object* data)
 {
     auto visitor = data->asNodeVisitor();
-    auto t0 = visitor->getFrameStamp()->getReferenceTime();
+    auto t0 = visitor->getFrameStamp()->getSimulationTime();
     auto deltaTime = _lastTime == 0 ? 0 : t0 - _lastTime;
     _lastTime = t0;
 
@@ -196,6 +202,7 @@ void Game::kickMole(Mole* mole)
 
     mole->setKicked(true);
     mole->getBurrow()->active = false;
+    playKickAnimation(mole->getMatrix().getTrans());
 
     // kick it away
     auto translation =
@@ -220,6 +227,7 @@ void Game::kickMole(Mole* mole)
 
 void Game::removeMole(Mole* mole)
 {
+    OSG_NOTICE << "Remove mole " << mole->getName() << std::endl;
     assert(mole->getNumParents() == 1);
     if (!mole->getKicked())
     {
@@ -348,6 +356,20 @@ osg::Node* Game::createUI()
     ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
     return root;
+}
+
+void Game::playKickAnimation(const osg::Vec3& pos)
+{
+    auto l = new Lightning;
+    l->setBillboard(true);
+    l->setBillboardWidth(5);
+    l->setMaxJitter(0.17);
+    l->setMaxForkAngle(osg::PIf * 0.025f);
+    l->setBillboardType(Lightning::bt_per_line_local);
+    l->add(8, pos + osg::Vec3(diskRand(5), 200), pos);
+
+    _sceneRoot->addChild(l);
+    _sceneRoot->addUpdateCallback(osgf::createTimerRemoveNodeUpdateCallback(1, l));
 }
 
 }  // namespace toy

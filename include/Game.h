@@ -104,6 +104,8 @@ private:
 
     osg::Node* createUI();
 
+    void playKickAnimation(const osg::Vec3& pos);
+
     Game() = default;
     ~Game() = default;
 
