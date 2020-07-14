@@ -6,12 +6,22 @@
 #include <osg/Callback>
 #include <osg/MatrixTransform>
 #include <osg/Referenced>
-#include <osgText/Text>
 #include <BaseGame.h>
 
 namespace osg
 {
 class MatrixTransform;
+class HeightField;
+}
+
+namespace osgTerrain
+{
+class Terrain;
+}
+
+namespace osgText
+{
+class Text;
 }
 
 namespace toy
@@ -24,6 +34,7 @@ struct Burrow
     bool active = false;
     int index = -1;
     osg::Vec3 pos = osg::Vec3();
+    osg::Vec3 normal = osg::Vec3(0, 0, 1);
     osg::Node* node;
 };
 
@@ -96,26 +107,36 @@ public:
     void setStatus(game_status v) { _status = v; }
 
 private:
-    osg::Node* createLawn();
+    osg::Node* createTerrain();
+
+    osg::Node* createMeadow();
+
+    osg::Node* createOverallMeadow();
+
+    std::pair<osg::Vec3, osg::Vec3> getTerrainPoint(float x, float y);
 
     void createBurrows();
 
-    Burrow createBurrow(const osg::Vec3& pos);
+    Burrow createBurrow(const osg::Vec3& pos, const osg::Vec3& normal);
 
     osg::Node* createUI();
 
     void playKickAnimation(const osg::Vec3& pos);
 
-    Game() = default;
-    ~Game() = default;
+    Game();
+    ~Game();
 
     int _score = 0;
     float _lastTime = 0;
     float _timer = 30;
     game_status _status = gs_init;
+
     osg::ref_ptr<osgText::Text> _scoreText;
     osg::ref_ptr<osgText::Text> _msg;
     osg::ref_ptr<osgText::Text> _timerText;
+    osg::ref_ptr<osg::HeightField> _heightField;
+    osg::ref_ptr<osgTerrain::Terrain> _terrain;
+
     std::vector<Burrow> _burrowList;
 };
 

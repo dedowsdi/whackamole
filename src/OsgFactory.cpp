@@ -206,16 +206,34 @@ void addGridTexcoords(T& texcoords, int stacks, int slices, const osg::Vec2& tex
     }
 }
 
-void addInvalidBoundingBoxCallback(osg::Drawable& drawble)
-{
-    std::cerr << __FUNCTION__ << " not implemented" << std::endl;
-}
-
 #define INSTANTIATE_addGridTexcoords(T)                                                    \
     template void addGridTexcoords<T>(T & texcoords, int stacks, int slices,               \
         const osg::Vec2& texcoord0, const osg::Vec2& texcoord1);
 INSTANTIATE_addGridTexcoords(osg::Vec2Array);
 INSTANTIATE_addGridTexcoords(std::vector<osg::Vec2>);
+
+template<typename T>
+void addGridTexcoordsSliceBySlice(T& texcoords, int slices, int stacks,
+    const osg::Vec2& texcoord0, const osg::Vec2& texcoord1)
+{
+    auto sStep = 1.0f / slices;
+    auto tStep = 1.0f / stacks;
+    for (auto i = 0; i <= slices; ++i)
+    {
+        auto t = detail::mix(texcoord0.y(), texcoord1.y(), i * tStep);
+        for (auto j = 0u; j <= stacks; j++)
+        {
+            auto s = detail::mix(texcoord0.x(), texcoord1.x(), j * sStep);
+            texcoords.push_back(osg::Vec2(s, t));
+        }
+    }
+}
+
+#define INSTANTIATE_addGridTexcoordsSliceBySLice(T)                                        \
+    template void addGridTexcoordsSliceBySlice<T>(T & texcoords, int stacks, int slices,   \
+        const osg::Vec2& texcoord0, const osg::Vec2& texcoord1);
+INSTANTIATE_addGridTexcoordsSliceBySLice(osg::Vec2Array);
+INSTANTIATE_addGridTexcoordsSliceBySLice(std::vector<osg::Vec2>);
 
 osg::Geometry* createAxes(float size, float lineWidth)
 {

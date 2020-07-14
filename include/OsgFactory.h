@@ -148,6 +148,13 @@ void bakeTransform(osg::Node& node);
 // create triangle strip elements as adbecf... or daebfc... if reversed:
 //  a b c ...
 //  d e f ...
+//
+// This function also works if your grid is created slice by slice, it results in adbecf...
+// for following vertices.
+//  . .
+//  c f
+//  b e
+//  a d
 template<typename T>
 void addGridElements(
     osg::Geometry& geom, int stacks, int slices, int offset = 0, bool reverse = false);
@@ -158,6 +165,11 @@ template<typename T>
 void addGridTexcoords(T& texcoords, int stacks, int slices,
     const osg::Vec2& texcoord0 = osg::Vec2(0, 1),
     const osg::Vec2& texcoord1 = osg::Vec2(1, 0));
+
+template<typename T>
+void addGridTexcoordsSliceBySlice(T& texcoords, int slices, int stacks,
+    const osg::Vec2& texcoord0 = osg::Vec2(0, 0),
+    const osg::Vec2& texcoord1 = osg::Vec2(1, 1));
 
 // Only used for debug purpose. All axes created by this function share a
 // function local static StateSet.

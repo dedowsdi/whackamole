@@ -33,6 +33,7 @@ find_package(OpenSceneGraph REQUIRED COMPONENTS
     osgGA
     osgDB
     osgUtil
+    osgTerrain
     )
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FREEALUT REQUIRED freealut)
@@ -61,6 +62,7 @@ set(SRC
     src/ToyCopyOp.cpp
     src/ToyViewer.cpp
     src/main.cpp
+    src/Screw.cpp
     )
 
 add_executable(whackamole ${SRC})

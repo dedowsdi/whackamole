@@ -1,5 +1,7 @@
 #include <Math.h>
 
+#include <cassert>
+
 #include <osg/DisplaySettings>
 
 namespace toy
@@ -77,8 +79,9 @@ std::vector<osg::Vec2> poissonDiskSample(
     // list”
     auto firstSample = linearRand(minExt, maxExt);
     samples.push_back(firstSample);
-    auto idx = (firstSample - minExt) / cellSize;
-    grid[idx.y() * cols + idx.x()] = 0;
+    int row = (firstSample.y() - minExt.y()) / cellSize;
+    int col = (firstSample.x() - minExt.x()) / cellSize;
+    grid[row * cols + col] = 0;
     actives.push_back(0);
 
     // step 2 : While the active list is not empty, choose a random active_index from it
@@ -102,16 +105,18 @@ std::vector<osg::Vec2> poissonDiskSample(
                 sample + circularRand(1.0f) * linearRand(radius, twoRadius);
             while (newSample.x() < minExt.x() || newSample.y() < minExt.y() ||
                    newSample.x() > maxExt.x() || newSample.y() > maxExt.y())
+            {
                 newSample = sample + circularRand(1.0f) * linearRand(radius, twoRadius);
-            auto row = (newSample.y() - minExt.y()) / cellSize;
-            auto col = (newSample.x() - minExt.x()) / cellSize;
+            }
+
+            int row = (newSample.y() - minExt.y()) / cellSize;
+            int col = (newSample.x() - minExt.x()) / cellSize;
 
             // check neighbour of new sample to make sure there has no sample in r
             // radius
             bool validNewSample = true;
             for (auto i = -nbRadius; i <= nbRadius && validNewSample; ++i)
             {
-
                 auto nbRow = row + i;
                 if (nbRow < 0 || nbRow >= rows)
                     continue;
@@ -135,14 +140,30 @@ std::vector<osg::Vec2> poissonDiskSample(
             if (!validNewSample)
                 continue;
 
-            auto newSampleIndex = row * cols + col;
-            grid[newSampleIndex] = samples.size();
+            // debug
+            // for (auto i = 0; i < samples.size(); ++i)
+            // {
+            //     auto r2 = (newSample - samples[i]).length2();
+            //     if ( r2 <= radius2)
+            //     {
+            //         int c0 = (newSample.x() - minExt.x()) / cellSize;
+            //         int r0 = (newSample.y() - minExt.y()) / cellSize;
+            //         int c1 = (samples[i].x() - minExt.x()) / cellSize;
+            //         int r1 = (samples[i].y() - minExt.y()) / cellSize;
+            //         OSG_NOTICE << "found illegal newSample " << newSample.x() << ","
+            //                    << newSample.y() << " " << r0 << ":" << c0
+            //                    << ", it's too close to " << samples[i].x() << ","
+            //                    << samples[i].y() << " " << r1 << ":" << c1 << " ("
+            //                    << sqrt(r2) << "), it's grid value is "
+            //                    << grid[r1 * cols + c1] << std::endl;
+            //     }
+            // }
+
+            grid[row * cols + col] = samples.size();
             actives.push_back(samples.size());
             samples.push_back(newSample);
             emitted = true;
-            if (samples.size() > grid.size())
-                throw std::runtime_error("something wrong happened, sample size should not "
-                                         "be bigger than gird size");
+            assert(samples.size() <= grid.size());
             break;
         }
 

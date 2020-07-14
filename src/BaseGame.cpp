@@ -206,6 +206,8 @@ void BaseGame::createRoots()
 
     _hudCamera = osgf::createOrthoCamera(0, rect.z(), 0, rect.w());
     _hudCamera->setName("Hud");
+    auto ss = _hudCamera->getOrCreateStateSet();
+    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
     _root->addChild(_hudCamera);
 }
 
