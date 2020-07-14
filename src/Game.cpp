@@ -1,12 +1,15 @@
 #include <Game.h>
 
 #include <cassert>
+#include <iomanip>
 
 #include <osg/AlphaFunc>
 #include <osg/AnimationPath>
+#include <osg/BlendFunc>
 #include <osg/Camera>
 #include <osg/ComputeBoundsVisitor>
 #include <osg/Depth>
+#include <osg/Geometry>
 #include <osg/Material>
 #include <osg/MatrixTransform>
 #include <osg/ShapeDrawable>
@@ -21,11 +24,9 @@
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
 #include <osgViewer/Viewer>
-#include <osg/BlendFunc>
 #include <Lightning.h>
 #include <Math.h>
 #include <OsgFactory.h>
-#include <Screw.h>
 
 namespace toy
 {
@@ -68,9 +69,13 @@ public:
                 break;
 
             case osgGA::GUIEventAdapter::KEYDOWN:
-                if (sgg.getStatus() == Game::gs_init || sgg.getStatus() == Game::gs_timeout)
+                switch (ea.getKey())
                 {
-                    sgg.restart();
+                    case osgGA::GUIEventAdapter::KEY_R:
+                        sgg.restart();
+                        break;
+                    default:
+                        break;
                 }
                 break;
 
@@ -133,7 +138,7 @@ bool Game::run(osg::Object* object, osg::Object* data)
 {
     auto visitor = data->asNodeVisitor();
     auto t0 = visitor->getFrameStamp()->getSimulationTime();
-    auto deltaTime = _lastTime == 0 ? 0 : t0 - _lastTime;
+    _deltaTime = _lastTime == 0 ? 0 : t0 - _lastTime;
     _lastTime = t0;
 
     if (_status == gs_running)
@@ -144,8 +149,10 @@ bool Game::run(osg::Object* object, osg::Object* data)
             popMole();
         }
 
-        _timer -= deltaTime;
-        _timerText->setText(std::to_string(_timer));
+        _timer -= _deltaTime;
+        std::stringstream ss;
+        ss << std::setprecision(2) << std::fixed << std::showpoint << _timer;
+        _timerText->setText(ss.str());
 
         if (_timer <= 0)
         {
@@ -273,8 +280,12 @@ void Game::restart()
 
     _msg->setNodeMask(0);
     _timer = 30;
-    _timerText->setNodeMask(-1);
+    _totalTime = 30;
     _timerText->setText(std::to_string(_timer));
+
+    show(_scoreText);
+    show(_timerText);
+    show(_timerBar);
 
     _status = gs_running;
 
@@ -283,11 +294,19 @@ void Game::restart()
 
 void Game::timeout()
 {
-    _msg->setNodeMask(-1);
-    _msg->setText("Press any key to restart");
-
-    _timerText->setNodeMask(0);
+    show(_msg);
+    _msg->setText("Press r to start new game.");
     _status = gs_timeout;
+}
+
+void Game::hide(osg::Node* node)
+{
+    node->setNodeMask(0);
+}
+
+void Game::show(osg::Node* node)
+{
+    node->setNodeMask(1);
 }
 
 osg::Node* Game::createTerrain()
@@ -428,7 +447,6 @@ osg::Node* Game::createMeadow()
         }
     }
 
-
     osg::StateSet* ss = root->getOrCreateStateSet();
 
     auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
@@ -436,14 +454,13 @@ osg::Node* Game::createMeadow()
     ss->setTextureAttributeAndModes(0, texture);
 
     auto material = new osg::Material;
-    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8,0.8, 0.8, 0.8));
+    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));
 
     ss->setAttributeAndModes(material);
     ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
     ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
     ss->setAttributeAndModes(
         new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
-
 
     return root;
 }
@@ -586,23 +603,65 @@ osgText::Text* createText(
     return t;
 }
 
+class TimerBarUpdater : public osg::StateSet::Callback
+{
+public:
+    TimerBarUpdater(osg::Uniform* uniform) : _uniform(uniform) {}
+
+private:
+    void operator()(osg::StateSet*, osg::NodeVisitor*) override
+    {
+        _uniform->set(sgg.getPercentTime());
+    }
+    osg::Uniform* _uniform = 0;
+};
+
 osg::Node* Game::createUI()
 {
-    _scoreText = createText("Score", "0", 50, osg::Vec3(20, 20, 0));
-    _score = 0;
+    auto wsize = getWindowSize();
+    auto barSize = osg::Vec2(wsize.x() * 0.95, wsize.y() * 0.04);
+    auto y = 16;
 
-    _msg = createText("Msg", "Press any key to start game.", 20, osg::Vec3(128, 20, 0));
-    _timerText = createText("Timer", "30", 20, osg::Vec3(156, 20, 0));
+    // create timer text, bar
+    {
+        // auto barSize = osg::Vec2(bbTimer.xMin() - 4 - bbScore.xMax(), 50);
+        _timerBar = osg::createTexturedQuadGeometry(osg::Vec3(wsize.x() * 0.025, y, 0),
+            osg::Vec3(barSize.x(), 0, 0), osg::Vec3(0, barSize.y(), 0));
+        y += barSize.y() + 2;
+
+        auto ss = _timerBar->getOrCreateStateSet();
+
+        auto prg = createProgram("shader/timer_bar.frag");
+        ss->setAttributeAndModes(prg);
+
+        ss->addUniform(new osg::Uniform("size", barSize));
+        auto percentUniform = new osg::Uniform("percent", 1.0f);
+        ss->addUniform(percentUniform);
+        ss->setUpdateCallback(new TimerBarUpdater(percentUniform));
+    }
+
+    _score = 0;
+    _scoreText = createText("Score", "0", 18, osg::Vec3(10, y, 0));
+    _timerText = createText("Timer", "30", 18, osg::Vec3(wsize.x() * 0.975f, y, 0));
+    _timerText->setAlignment(osgText::Text::RIGHT_BOTTOM);
+
+    _msg = createText(
+        "Msg", "Press r to start new game.", 18, osg::Vec3(20, wsize.y() - 20, 0));
+    _msg->setAlignment(osgText::Text::LEFT_TOP);
 
     auto root = new osg::Group;
     root->addChild(_scoreText);
     root->addChild(_msg);
     root->addChild(_timerText);
+    root->addChild(_timerBar);
+
+    hide(_scoreText);
+    hide(_timerText);
+    hide(_timerBar);
 
     _timerText->setNodeMask(0);
 
     auto ss = root->getOrCreateStateSet();
-    ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
     return root;
 }

@@ -208,6 +208,7 @@ void BaseGame::createRoots()
     _hudCamera->setName("Hud");
     auto ss = _hudCamera->getOrCreateStateSet();
     ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+    ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
     _root->addChild(_hudCamera);
 }
 

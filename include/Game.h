@@ -106,6 +106,17 @@ public:
     game_status getStatus() const { return _status; }
     void setStatus(game_status v) { _status = v; }
 
+    double getDeltaTime() const { return _deltaTime; }
+
+    float getTotalTime() const { return _totalTime; }
+    void setTotalTime(float v) { _totalTime = v; }
+
+    float getPercentTime() const { return _timer / _totalTime; }
+
+    void hide(osg::Node* node);
+
+    void show(osg::Node* node);
+
 private:
     osg::Node* createTerrain();
 
@@ -126,14 +137,19 @@ private:
     Game();
     ~Game();
 
-    int _score = 0;
-    float _lastTime = 0;
-    float _timer = 30;
     game_status _status = gs_init;
 
-    osg::ref_ptr<osgText::Text> _scoreText;
-    osg::ref_ptr<osgText::Text> _msg;
+    double _lastTime = 0;
+    double _deltaTime = 0;
+    float _timer = 30;
+    float _totalTime = 30;
     osg::ref_ptr<osgText::Text> _timerText;
+    osg::ref_ptr<osg::Node> _timerBar;
+
+    int _score = 0;
+    osg::ref_ptr<osgText::Text> _scoreText;
+
+    osg::ref_ptr<osgText::Text> _msg;
     osg::ref_ptr<osg::HeightField> _heightField;
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
 
