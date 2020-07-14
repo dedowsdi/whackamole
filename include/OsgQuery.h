@@ -62,7 +62,10 @@ bool contains(osgAnimation::Timeline& timeline, osgAnimation::Action& action);
 // Node {{{1
 
 // use negative maxDepth if you want unlimited depth.
-osg::Node* searchNode(osg::Group& node, const std::string& name, int maxDepth = -1);
+std::vector<osg::Node*> searchNode(
+    osg::Node& node, const std::string& name, int maxDepth = -1);
+
+std::vector<osg::Node*> searchNodeByMaterial(osg::Node& node, const std::string& name);
 
 template<typename T>
 osg::NodePathList searchNodes(

@@ -66,6 +66,7 @@ Lightning::Lightning()
         GL_TRIANGLE_STRIP, 12);
 
     setBillboardType(bt_per_line);
+    setBillboard(true);
 }
 
 void Lightning::add(const std::string& pattern, const osg::Vec3& p0, const osg::Vec3& p1)

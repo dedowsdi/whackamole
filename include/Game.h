@@ -27,8 +27,6 @@ class Text;
 namespace toy
 {
 
-#define sgg ::toy::Game::instance()
-
 struct Burrow
 {
     bool active = false;
@@ -47,22 +45,29 @@ public:
     void setBurrow(Burrow* v) { _burrow = v; }
 
     bool getKicked() const { return _kicked; }
-    void setKicked(bool v) { _kicked = v; }
+    void setKicked(bool v); 
 
     int getScore() const { return _score; }
     void setScore(int v) { _score = v; }
 
-    static const osg::BoundingBox& getDrawableBoundingBox();
-    static osg::Node* getDrawable();
+    static const osg::BoundingBox& getModelBoundingBox();
+
+    static osg::Node* getModel();
+
+    static osg::Node* getBurnedModel();
 
 private:
-    static osg::ref_ptr<osg::Node> _drawable;
+    static osg::ref_ptr<osg::Node> _model;
+    static osg::ref_ptr<osg::Node> _burnedModel;
     static osg::BoundingBox _boundingbox;
 
     bool _kicked = false;
     int _score = 100;
     Burrow* _burrow = 0;
+    osg::ref_ptr<osg::Switch> _switch;
 };
+
+#define sgg ::toy::Game::instance()
 
 class Game
     : public BaseGame
@@ -118,6 +123,10 @@ public:
     void show(osg::Node* node);
 
 private:
+    Game();
+
+    ~Game();
+
     osg::Node* createTerrain();
 
     osg::Node* createMeadow();
@@ -134,8 +143,7 @@ private:
 
     void playKickAnimation(const osg::Vec3& pos);
 
-    Game();
-    ~Game();
+    void createStartAnimation();
 
     game_status _status = gs_init;
 

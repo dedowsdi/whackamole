@@ -81,8 +81,8 @@ private:
 
     void updateUniforms();
 
-    bool _billboard = false;
-    billboard_type _billboardType;
+    bool _billboard = true;
+    billboard_type _billboardType = bt_per_line_local;
     float _billboardWidth = 2;
     float _maxJitter = 0.5f;  // normalized, in size of subdivide
     float _maxForkAngle = osg::PI_4f;

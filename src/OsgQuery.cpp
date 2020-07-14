@@ -45,35 +45,72 @@ public:
     {
         if (_depth >= 0 && node.getName() == _name)
         {
-            _node = &node;
+            _nodes.push_back(&node);
         }
-        else
+
+        if (_depth < _maxDepth)
         {
-            if (_depth < _maxDepth)
-            {
-                ++_depth;
-                traverse(node);
-                --_depth;
-            }
+            ++_depth;
+            traverse(node);
+            --_depth;
         }
     }
 
-    osg::Node* getNode() const { return _node; }
+    std::vector<osg::Node*>  getNodes() const { return _nodes; }
 
 private:
     // Use the same convention as find, depth 0 means search direct children
     int _maxDepth = 0;
     int _depth = -1;
-    osg::Node* _node = 0;
+    std::vector<osg::Node*> _nodes ;
     std::string _name;
 };
 
-osg::Node* searchNode(osg::Group& node, const std::string& name, int maxDepth)
+std::vector<osg::Node*> searchNode(osg::Node& node, const std::string& name, int maxDepth)
 {
     SearchNodeVisitor visitor(name, maxDepth < 0 ? INT_MAX : maxDepth);
     visitor.setNodeMaskOverride(-1);
     node.accept(visitor);
-    return visitor.getNode();
+    return visitor.getNodes();
+}
+
+class SearchNodeByMaterialVisitor : public osg::NodeVisitor
+{
+public:
+    SearchNodeByMaterialVisitor(const std::string& name)
+        : _name(name)
+    {
+        setTraversalMode(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN);
+    }
+
+    void apply(osg::Node& node) override
+    {
+        auto ss = node.getStateSet();
+        if (ss)
+        {
+            auto mtl = ss->getAttribute(osg::StateAttribute::MATERIAL);
+            if (mtl && mtl->getName() == _name)
+            {
+                _nodes.push_back(&node);
+            }
+        }
+        traverse(node);
+    }
+
+    std::vector<osg::Node*>  getNodes() const { return _nodes; }
+
+private:
+    // Use the same convention as find, depth 0 means search direct children
+    std::vector<osg::Node*> _nodes ;
+    std::string _name;
+};
+
+std::vector<osg::Node*> searchNodeByMaterial(osg::Node& node, const std::string& name)
+{
+    SearchNodeByMaterialVisitor visitor(name);
+    visitor.setNodeMaskOverride(-1);
+    node.accept(visitor);
+    return visitor.getNodes();
 }
 
 namespace

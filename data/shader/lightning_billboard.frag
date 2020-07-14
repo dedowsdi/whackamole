@@ -17,6 +17,6 @@ void main(void)
     if (v_length2 > 0.25)
         discard;
 
-    float f = 0.13f / pow(v_length2, 0.3);
+    float f = 0.13f / pow(v_length2, 0.2);
     gl_FragColor = vec4(f);
 }

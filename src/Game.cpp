@@ -13,6 +13,7 @@
 #include <osg/Material>
 #include <osg/MatrixTransform>
 #include <osg/ShapeDrawable>
+#include <osg/Switch>
 #include <osg/io_utils>
 #include <osgDB/ReadFile>
 #include <osgGA/GUIEventHandler>
@@ -24,9 +25,14 @@
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
 #include <osgViewer/Viewer>
+
 #include <Lightning.h>
+#include <ALBuffer.h>
+#include <ALSource.h>
+#include <DB.h>
 #include <Math.h>
 #include <OsgFactory.h>
+#include <OsgQuery.h>
 
 namespace toy
 {
@@ -39,6 +45,7 @@ const int terrainRows = 65;
 const float lawnHeight = 2.0f;
 const float burrowRadius = 6.0f;
 const float burrowHeight = 6.0f;
+const float moleSize = 6;
 // const int numGrass = 128;
 const float grassSize = 8;
 
@@ -105,19 +112,29 @@ private:
     }
 };
 
-osg::ref_ptr<osg::Node> Mole::_drawable;
+osg::ref_ptr<osg::Node> Mole::_model;
+osg::ref_ptr<osg::Node> Mole::_burnedModel;
 osg::BoundingBox Mole::_boundingbox;
 
 Mole::Mole(Burrow* burrow) : _burrow(burrow)
 {
-    addChild(getDrawable());
+    _switch = new osg::Switch;
+    _switch->addChild(getModel(), true);
+    _switch->addChild(getBurnedModel(), false);
+    addChild(_switch);
 }
 
-const osg::BoundingBox& Mole::getDrawableBoundingBox()
+void Mole::setKicked(bool v)
+{
+    _kicked = v;
+    _switch->setSingleChildOn(v ? 1 : 0);
+}
+
+const osg::BoundingBox& Mole::getModelBoundingBox()
 {
     if (!_boundingbox.valid())
     {
-        auto node = getDrawable();
+        auto node = getModel();
         osg::ComputeBoundsVisitor visitor;
         node->accept(visitor);
         _boundingbox = visitor.getBoundingBox();
@@ -125,13 +142,75 @@ const osg::BoundingBox& Mole::getDrawableBoundingBox()
     return _boundingbox;
 }
 
-osg::Node* Mole::getDrawable()
+osg::Node* Mole::getModel()
 {
-    if (!_drawable)
+    if (!_model)
     {
-        _drawable = osgDB::readNodeFile("model/mole.osgt");
+        auto node = osgDB::readNodeFile("model/mole.osgt");
+        auto bound = node->getBound();
+        auto scale = moleSize * 0.5 / bound.radius();
+
+        osg::Matrix m = osg::Matrix::scale(scale, scale, scale);
+        m.preMultTranslate(-bound.center());
+
+        auto frame = new osg::MatrixTransform;
+        frame->setMatrix(m);
+        frame->addChild(node);
+
+        _model = frame;
     }
-    return _drawable;
+    return _model;
+}
+
+osg::Node* Mole::getBurnedModel()
+{
+    if (!_burnedModel)
+    {
+        auto burned = osg::clone(getModel(), osg::CopyOp::DEEP_COPY_NODES);
+
+        // change body material
+        {
+            auto nodes = osgq::searchNodeByMaterial(*burned, "Mat.1");
+            if (nodes.empty())
+            {
+                OSG_WARN << "Failed to search body node" << std::endl;
+            }
+            else
+            {
+                auto mtl = new osg::Material;
+                mtl->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.1, 0.1, 0.1, 1));
+
+                // Be careful here, 0 is original parent leaf
+                auto leaf = nodes.front()->getParent(1);
+                auto ss = leaf->getOrCreateStateSet();
+                ss->setAttributeAndModes(
+                    mtl, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+            }
+        }
+
+        // change hat material
+        {
+            auto nodes = osgq::searchNode(*burned, "Null.002_Mesh.002");
+            if (nodes.empty())
+            {
+                OSG_WARN << "Failed to search hat node" << std::endl;
+            }
+            else
+            {
+                auto mtl = new osg::Material;
+                mtl->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.1, 0.1, 0.1, 1));
+
+                auto ss = nodes.front()->getOrCreateStateSet();
+                ss->setAttributeAndModes(
+                    mtl, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+            }
+
+        }
+
+        _burnedModel = burned;
+    }
+
+    return _burnedModel;
 }
 
 bool Game::run(osg::Object* object, osg::Object* data)
@@ -168,6 +247,7 @@ void Game::createScene()
     _hudCamera->addChild(createUI());
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
+    createStartAnimation();
 }
 
 void Game::popMole()
@@ -194,14 +274,14 @@ void Game::popMole()
 
     // pop mole, play animation
     auto startPos = burrow.pos;
-    startPos -= burrow.normal * Mole::getDrawableBoundingBox().zMax();
+    startPos -= burrow.normal * Mole::getModelBoundingBox().zMax();
     auto endPos = burrow.pos;
-    endPos -= burrow.normal * Mole::getDrawableBoundingBox().zMin();
+    endPos -= burrow.normal * Mole::getModelBoundingBox().zMin();
 
     auto mole = new Mole(&burrow);
     mole->setName("Mole" + std::to_string(moleIndex++));
     mole->setMatrix(osg::Matrix::translate(startPos));
-    _root->addUpdateCallback(osgf::createTimerUpdateCallback(
+    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(
         8, [=](osg::Object* object, osg::Object* data) -> void { sgg.removeMole(mole); }));
 
     auto animPath = new osg::AnimationPath;
@@ -272,6 +352,7 @@ void Game::restart()
     _scoreText->setText("0");
 
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
+    _sceneRoot->setUpdateCallback(0);
     _sceneRoot->addChild(createTerrain());
     _sceneRoot->addChild(createMeadow());
 
@@ -308,6 +389,10 @@ void Game::show(osg::Node* node)
 {
     node->setNodeMask(1);
 }
+
+Game::Game() {}
+
+Game::~Game() {}
 
 osg::Node* Game::createTerrain()
 {
@@ -669,19 +754,64 @@ osg::Node* Game::createUI()
 void Game::playKickAnimation(const osg::Vec3& pos)
 {
     auto l = new Lightning;
-    l->setBillboard(true);
     l->setBillboardWidth(5);
     l->setMaxJitter(0.17);
-    l->setMaxForkAngle(osg::PIf * 0.025f);
-    l->setBillboardType(Lightning::bt_per_line_local);
-    l->add(8, pos + osg::Vec3(diskRand(5), 200), pos);
+    l->add("jjjjjjjj", pos + osg::Vec3(diskRand(5), 200), pos);
 
     _sceneRoot->addChild(l);
     _sceneRoot->addUpdateCallback(osgf::createTimerRemoveNodeUpdateCallback(1, l));
 }
 
-Game::Game() {}
+class StartAnimationUpdater : public osg::Callback
+{
+public:
+    StartAnimationUpdater(Mole* mole) : _mole(mole) {}
 
-Game::~Game() {}
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        auto m = _mole->getMatrix();
+        auto pos = m.getTrans();
+
+        if (pos.x() > 1)
+        {
+            if (!_mole->getKicked())
+            {
+                _mole->setKicked(true);
+
+                auto l = new Lightning;
+                l->setBillboardWidth(5);
+                l->setMaxJitter(0.17);
+                l->add("jjjjjjjj", pos + osg::Vec3(diskRand(5), 100), pos);
+
+                playSound(_mole, new ALSource(osgDB::readALBufferFile("sound/hit.wav")));
+
+                sgg.getSceneRoot()->addChild(l);
+            }
+        }
+        else
+        {
+            auto dt = sgg.getDeltaTime();
+            m.postMultTranslate(osg::Vec3(1, 0, 0) * dt);
+            _mole->setMatrix(m);
+        }
+
+        return traverse(object, data);
+    }
+
+private:
+    Mole* _mole = 0;
+};
+
+void Game::createStartAnimation()
+{
+    auto root = new osg::Group;
+    root->setName("StartAnimation");
+
+    auto mole = new Mole(0);
+    root->addChild(mole);
+    _sceneRoot->addUpdateCallback(new StartAnimationUpdater(mole));
+
+    _sceneRoot->addChild(root);
+}
 
 }  // namespace toy
