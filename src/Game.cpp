@@ -25,6 +25,7 @@
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
 #include <osgViewer/Viewer>
+#include <osgGA/OrbitManipulator>
 
 #include <Lightning.h>
 #include <ALBuffer.h>
@@ -47,7 +48,8 @@ const float burrowRadius = 10.0f;
 const float burrowHeight = 6.0f;
 const float moleSize = 10;
 // const int numGrass = 128;
-const float grassSize = 8;
+const float grassSize = 10;
+const float explosionForce = 10;
 
 osg::Vec3 Burrow::getTopCenter()
 {
@@ -249,8 +251,11 @@ bool Game::run(osg::Object* object, osg::Object* data)
 void Game::createScene()
 {
     _hudCamera->addChild(createUI());
+
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
+
+    _explosions.resize(16);
     createStartAnimation();
 }
 
@@ -326,9 +331,14 @@ void Game::whackMole(Mole* mole)
     mole->setNodeMask(nb_visible);
 
     auto pos = mole->getMatrix().getTrans();
+
     playWhackAnimation(pos);
+
     popScore(pos, mole->getScore());
 
+    explode(pos);
+
+    // play sound
     auto sound = new ALSource(osgDB::readALBufferFile("sound/hit.wav"));
     playSound(mole->getBurrow()->node, sound);
 
@@ -399,7 +409,11 @@ void Game::restart()
 
     _status = gs_running;
 
-    _viewer->getCameraManipulator()->home(0);
+    auto cm = dynamic_cast<osgGA::OrbitManipulator*>(_viewer->getCameraManipulator());
+    cm->home(0);
+    osg::Quat q;
+    q.makeRotate(osg::PI / 3, osg::X_AXIS);
+    cm->setRotation(q);
 }
 
 void Game::timeout()
@@ -442,7 +456,7 @@ osg::Node* Game::createTerrain()
 
     auto yStep = 0.03;
     auto xStep = 0.03;
-    double v[2] = {0, 0};
+    double v[2] = {linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f)};
 
     for (int y = 0; y < rows; ++y)
     {
@@ -537,7 +551,7 @@ osg::Node* Game::createMeadow()
     auto grass = createGrass();
     auto origin = osg::Vec2(-sceneRadius, -sceneRadius);
 
-    auto stepSize = grassSize * 0.65f;
+    auto stepSize = grassSize * 0.6f;
 
     auto cols = sceneRadius * 2 / stepSize;
     auto rows = sceneRadius * 2 / stepSize;
@@ -563,20 +577,44 @@ osg::Node* Game::createMeadow()
         }
     }
 
-    osg::StateSet* ss = root->getOrCreateStateSet();
+    static osg::StateSet* ss = 0;
+    if (!ss)
+    {
+        ss = root->getOrCreateStateSet();
 
-    auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
-    texture->setResizeNonPowerOfTwoHint(false);
-    ss->setTextureAttributeAndModes(0, texture);
+        auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
+        texture->setResizeNonPowerOfTwoHint(false);
+        ss->setTextureAttributeAndModes(0, texture);
 
-    auto material = new osg::Material;
-    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));
+        auto material = new osg::Material;
+        material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));
 
-    ss->setAttributeAndModes(material);
-    ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-    ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
-    ss->setAttributeAndModes(
-        new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+        ss->setAttributeAndModes(material);
+        ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+        ss->setAttributeAndModes(new osg::BlendFunc(
+            osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+
+        auto prg = createProgram("shader/grass.vert", "shader/grass.frag");
+        ss->setAttributeAndModes(prg);
+
+        ss->addUniform(new osg::Uniform("viewMatrix", osg::Matrixf()));
+        ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
+    }
+    root->setStateSet(ss);
+    auto uf = ss->getUniform("explosions");
+
+    // update explosion uniform
+    root->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+        auto& viewMatrix =
+            data->asNodeVisitor()->asCullVisitor()->getCurrentCamera()->getViewMatrix();
+        for (auto i = 0; i < _explosions.size(); ++i)
+        {
+            auto& e = _explosions[i];
+            osg::Vec4 v = osg::Vec4(e.x(), e.y(), e.z(), 1) *  viewMatrix;
+            v.w() = e.w();
+            uf->setElement(i, v);
+        }
+    }));
 
     return root;
 }
@@ -746,7 +784,7 @@ osg::Node* Game::createUI()
 
         auto ss = _timerBar->getOrCreateStateSet();
 
-        auto prg = createProgram("shader/timer_bar.frag");
+        auto prg = createProgram("shader/timer_bar.frag", osg::Shader::FRAGMENT);
         ss->setAttributeAndModes(prg);
 
         ss->addUniform(new osg::Uniform("size", barSize));
@@ -820,6 +858,24 @@ void Game::popScore(const osg::Vec3& pos, int score)
 
     _sceneRoot->addChild(text);
     _sceneRoot->addUpdateCallback(osgf::createTimerRemoveNodeUpdateCallback(1, text));
+}
+
+void Game::explode(const osg::Vec3& pos)
+{
+    auto iter = std::find_if(
+        _explosions.begin(), _explosions.end(), [](auto& v) { return v.w() <= 0; });
+    if (iter == _explosions.end())
+    {
+        OSG_NOTICE << "Running out of explosions" << std::endl;
+    }
+
+    *iter = osg::Vec4(pos, explosionForce);
+    auto index = std::distance(_explosions.begin(), iter);
+    auto explosionUpdater = osgf::createCallback(
+        [=](auto obj, auto data) { _explosions[index].w() -= sgg.getDeltaTime() * 5; });
+    _sceneRoot->addUpdateCallback(explosionUpdater);
+    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(2.5,
+        [=](auto obj, auto data) { _sceneRoot->removeUpdateCallback(explosionUpdater); }));
 }
 
 class StartAnimationUpdater : public osg::Callback

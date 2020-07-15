@@ -149,6 +149,8 @@ private:
 
     void popScore(const osg::Vec3& pos, int score);
 
+    void explode(const osg::Vec3& pos);
+
     void createStartAnimation();
 
     game_status _status = gs_init;
@@ -167,6 +169,7 @@ private:
     osg::ref_ptr<osg::HeightField> _heightField;
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
 
+    std::vector<osg::Vec4> _explosions;
     std::vector<Burrow> _burrowList;
 };
 

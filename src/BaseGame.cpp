@@ -53,11 +53,12 @@ osg::Vec2 BaseGame::getWindowCenter()
     return osg::Vec2(size.x() * 0.5f, size.y() * 0.5f);
 }
 
-osg::Program* BaseGame::createProgram(const std::string& fragFile)
+osg::Program* BaseGame::createProgram(const std::string& fragFile, int shaderType)
 {
     auto prg = new osg::Program;
 
-    auto fragShader = osgDB::readShaderFile(osg::Shader::FRAGMENT, fragFile);
+    auto fragShader =
+        osgDB::readShaderFile(static_cast<osg::Shader::Type>(shaderType), fragFile);
     prg->addShader(fragShader);
 
 #ifdef DEBUG

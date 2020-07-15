@@ -67,7 +67,7 @@ public:
     osg::Vec2 getWindowCenter();
 
     // Create program and update it if ctime of shader file changed
-    osg::Program* createProgram(const std::string& fragFile);
+    osg::Program* createProgram(const std::string& fragFile, int shaderType);
 
     osg::Program* createProgram(const std::string& vertFile, const std::string& fragFile);
 
