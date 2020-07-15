@@ -93,7 +93,7 @@ private:
     osg::Vec4 _centerColor = osg::Vec4(1, 1, 1, 1);
     osg::Vec4 _borderColor = osg::Vec4(0, 0, 0.5, 1);
 
-    osg::ref_ptr<osg::Program> _billboardProgram;
+    static osg::ref_ptr<osg::Program> _billboardProgram;
 
     BoltList _bolts;
 

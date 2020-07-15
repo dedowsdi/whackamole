@@ -31,8 +31,12 @@ int ToyViewer::run()
         osg::Timer_t startFrameTick = osg::Timer::instance()->tick();
         if (!_pause || _debugSteps > 0)
         {
-            simulationTime += osg::Timer::instance()->delta_s(lastTick, startFrameTick);
-            --_debugSteps;
+            auto dt = osg::Timer::instance()->delta_s(lastTick, startFrameTick);
+            if (dt < 2)
+            {
+                simulationTime += dt;
+                --_debugSteps;
+            }
         }
 
         lastTick = startFrameTick;

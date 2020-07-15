@@ -6,17 +6,17 @@ varying vec2 texcoord;
 
 uniform vec4 center_color = vec4(1);
 uniform vec4 border_color = vec4(0, 0, 0, 1);
-uniform float exponent = 0.25;
+uniform float exponent = 0.37;
 
 void main(void)
 {
     vec2 v = texcoord - 0.5;
-    float v_length2 = dot(v, v);
+    float l = dot(v, v);
 
     // cull corner of end rect
-    if (v_length2 > 0.25)
+    if (l > 0.25)
         discard;
 
-    float f = 0.13f / pow(v_length2, 0.2);
+    float f = 0.07f / pow(l, exponent);
     gl_FragColor = vec4(f);
 }

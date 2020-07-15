@@ -30,10 +30,10 @@ namespace toy
 struct Burrow
 {
     bool active = false;
-    int index = -1;
-    osg::Vec3 pos = osg::Vec3();
     osg::Vec3 normal = osg::Vec3(0, 0, 1);
-    osg::Node* node;
+    osg::MatrixTransform* node;
+
+    osg::Vec3 getTopCenter();
 };
 
 class Mole : public osg::MatrixTransform
@@ -50,8 +50,6 @@ public:
     int getScore() const { return _score; }
     void setScore(int v) { _score = v; }
 
-    static const osg::BoundingBox& getModelBoundingBox();
-
     static osg::Node* getModel();
 
     static osg::Node* getBurnedModel();
@@ -65,6 +63,12 @@ private:
     int _score = 100;
     Burrow* _burrow = 0;
     osg::ref_ptr<osg::Switch> _switch;
+};
+
+enum node_bit
+{
+    nb_visible = 1 << 0,
+    nb_raytest = 1 << 1
 };
 
 #define sgg ::toy::Game::instance()
@@ -96,7 +100,7 @@ public:
 
     void popMole();
 
-    void kickMole(Mole* mole);
+    void whackMole(Mole* mole);
 
     void removeMole(Mole* mole);
 
@@ -141,7 +145,7 @@ private:
 
     osg::Node* createUI();
 
-    void playKickAnimation(const osg::Vec3& pos);
+    void playWhackAnimation(const osg::Vec3& pos);
 
     void createStartAnimation();
 

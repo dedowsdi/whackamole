@@ -43,11 +43,16 @@ const float sceneHeight = 32;
 const int terrainCols = 65;
 const int terrainRows = 65;
 const float lawnHeight = 2.0f;
-const float burrowRadius = 6.0f;
+const float burrowRadius = 10.0f;
 const float burrowHeight = 6.0f;
-const float moleSize = 6;
+const float moleSize = 10;
 // const int numGrass = 128;
 const float grassSize = 8;
+
+osg::Vec3 Burrow::getTopCenter()
+{
+    return osg::Vec3(0, 0, burrowHeight * 0.5f) * node->getMatrix();
+}
 
 class GameEventHandler : public osgGA::GUIEventHandler
 {
@@ -63,10 +68,13 @@ public:
                 {
                     case osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON:
                     {
-                        auto mole = getCursorMole(ea);
-                        if (mole)
+                        if (sgg.getStatus() == Game::gs_running)
                         {
-                            sgg.kickMole(mole);
+                            auto mole = getCursorMole(ea);
+                            if (mole)
+                            {
+                                sgg.whackMole(mole);
+                            }
                         }
                     }
                     break;
@@ -100,7 +108,7 @@ private:
     Mole* getCursorMole(const osgGA::GUIEventAdapter& ea)
     {
         osgUtil::LineSegmentIntersector::Intersections iss;
-        if (!sgg.getViewer()->computeIntersections(ea, iss))
+        if (!sgg.getViewer()->computeIntersections(ea, iss, nb_raytest))
             return 0;
 
         auto& np = iss.begin()->nodePath;
@@ -130,32 +138,28 @@ void Mole::setKicked(bool v)
     _switch->setSingleChildOn(v ? 1 : 0);
 }
 
-const osg::BoundingBox& Mole::getModelBoundingBox()
-{
-    if (!_boundingbox.valid())
-    {
-        auto node = getModel();
-        osg::ComputeBoundsVisitor visitor;
-        node->accept(visitor);
-        _boundingbox = visitor.getBoundingBox();
-    }
-    return _boundingbox;
-}
-
 osg::Node* Mole::getModel()
 {
     if (!_model)
     {
         auto node = osgDB::readNodeFile("model/mole.osgt");
-        auto bound = node->getBound();
-        auto scale = moleSize * 0.5 / bound.radius();
+
+        osg::ComputeBoundsVisitor visitor;
+        node->accept(visitor);
+        auto bb = visitor.getBoundingBox();
+        auto xyRadius =
+            osg::Vec2(bb.xMax() - bb.xMin(), bb.yMax() - bb.yMin()).length() * 0.5;
+        auto scale = moleSize / xyRadius;
 
         osg::Matrix m = osg::Matrix::scale(scale, scale, scale);
-        m.preMultTranslate(-bound.center());
+        m.preMultTranslate(-bb.center());
 
         auto frame = new osg::MatrixTransform;
         frame->setMatrix(m);
         frame->addChild(node);
+
+        auto ss = frame->getOrCreateStateSet();
+        ss->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON);
 
         _model = frame;
     }
@@ -256,11 +260,12 @@ void Game::popMole()
 
     // choose inactive burrow
     std::vector<int> indices;
-    for (auto& burrow: _burrowList)
+    for (auto i = 0; i < _burrowList.size(); ++i)
     {
+        auto& burrow = _burrowList[i];
         if (!burrow.active)
         {
-            indices.push_back(burrow.index);
+            indices.push_back(i);
         }
     }
 
@@ -270,45 +275,59 @@ void Game::popMole()
     }
 
     auto index = static_cast<int>(toy::unitRand() * indices.size());
-    auto& burrow = _burrowList[index];
-
-    // pop mole, play animation
-    auto startPos = burrow.pos;
-    startPos -= burrow.normal * Mole::getModelBoundingBox().zMax();
-    auto endPos = burrow.pos;
-    endPos -= burrow.normal * Mole::getModelBoundingBox().zMin();
+    auto& burrow = _burrowList[indices[index]];
+    burrow.active = true;
 
     auto mole = new Mole(&burrow);
     mole->setName("Mole" + std::to_string(moleIndex++));
-    mole->setMatrix(osg::Matrix::translate(startPos));
-    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(
-        8, [=](osg::Object* object, osg::Object* data) -> void { sgg.removeMole(mole); }));
+
+    osg::ComputeBoundsVisitor visitor;
+    mole->accept(visitor);
+    auto bb = visitor.getBoundingBox();
+
+    // pop mole, play animation
+    auto startPos = burrow.getTopCenter();
+    startPos -= burrow.normal * (bb.zMax() + 0.1);
+    auto endPos = burrow.getTopCenter();
+    endPos -= burrow.normal * (bb.zMin() - 2);
+
+    auto rot = osg::Matrix::rotate(osg::Z_AXIS, burrow.normal);
+    mole->setMatrix(rot * osg::Matrix::translate(startPos));
 
     auto animPath = new osg::AnimationPath;
     animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
     osgf::addControlPoints(
-        *animPath, 2, 0, 1, mole->getMatrix(), osg::Matrix::translate(endPos));
+        *animPath, 2, 0, 1, mole->getMatrix(), rot * osg::Matrix::translate(endPos));
     osgf::addControlPoints(
-        *animPath, 2, 1, 2, osg::Matrix::translate(endPos), mole->getMatrix(), false);
+        *animPath, 2, 1, 2, rot * osg::Matrix::translate(endPos), mole->getMatrix(), false);
 
     auto apc = new osg::AnimationPathCallback;
     apc->setAnimationPath(animPath);
     mole->setUpdateCallback(apc);
 
     _sceneRoot->addChild(mole);
+    _sceneRoot->addUpdateCallback(
+        osgf::createTimerUpdateCallback(2, [=](osg::Object* object, osg::Object* data) {
+            if (!mole->getKicked())
+                sgg.removeMole(mole);
+        }));
 }
 
-void Game::kickMole(Mole* mole)
+void Game::whackMole(Mole* mole)
 {
     assert(mole->getNumParents() == 1);
 
     mole->setKicked(true);
     mole->getBurrow()->active = false;
-    playKickAnimation(mole->getMatrix().getTrans());
+    mole->setNodeMask(nb_visible);
+    playWhackAnimation(mole->getMatrix().getTrans());
 
-    // kick it away
+    auto sound = new ALSource(osgDB::readALBufferFile("sound/hit.wav"));
+    playSound(mole->getBurrow()->node, sound);
+
+    // whack it away
     auto translation =
-        sphericalRand(200, osg::Vec2(0, osg::PI_2 * 0.8), osg::Vec2(0, 2 * osg::PI));
+        sphericalRand(300, osg::Vec2(0, osg::PI_2 * 0.8), osg::Vec2(0, 2 * osg::PI));
     auto targetMatrix = mole->getMatrix();
     targetMatrix.preMultTranslate(translation);
     auto duration = 2;
@@ -322,14 +341,17 @@ void Game::kickMole(Mole* mole)
 
     mole->setUpdateCallback(apc);
 
+    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(
+        duration, [=](osg::Object* object, osg::Object* data) { sgg.removeMole(mole); }));
+
     updateScore(mole->getMatrix().getTrans(), mole->getScore());
 
-    OSG_NOTICE << "Kick " << mole->getName() << std::endl;
+    OSG_INFO << "Whack " << mole->getName() << std::endl;
 }
 
 void Game::removeMole(Mole* mole)
 {
-    OSG_NOTICE << "Remove mole " << mole->getName() << std::endl;
+    OSG_INFO << "Remove mole " << mole->getName() << std::endl;
     assert(mole->getNumParents() == 1);
     if (!mole->getKicked())
     {
@@ -360,8 +382,8 @@ void Game::restart()
     createBurrows();
 
     _msg->setNodeMask(0);
-    _timer = 30;
-    _totalTime = 30;
+    _timer = 60;
+    _totalTime = 60;
     _timerText->setText(std::to_string(_timer));
 
     show(_scoreText);
@@ -501,6 +523,8 @@ osg::Geometry* createGrass()
 osg::Node* Game::createMeadow()
 {
     auto root = new osg::Group;
+    root->setNodeMask(nb_visible);
+
     auto pos = osg::Vec2();
 
     auto grass = createGrass();
@@ -637,10 +661,10 @@ std::pair<osg::Vec3, osg::Vec3> Game::getTerrainPoint(float x, float y)
 void Game::createBurrows()
 {
     auto maxCenter = sceneRadius - burrowRadius;
-    auto points = poissonDiskSample(
-        osg::Vec2(-sceneRadius, -sceneRadius), osg::Vec2(sceneRadius, sceneRadius), 50, 50);
+    auto points = poissonDiskSample(osg::Vec2(-sceneRadius, -sceneRadius) * 0.5,
+        osg::Vec2(sceneRadius, sceneRadius) * 0.5, 40, 32);
 
-    for (auto p: points)
+    for (auto& p: points)
     {
         auto tp = getTerrainPoint(p.x(), p.y());
         auto burrow = createBurrow(tp.first, tp.second);
@@ -663,13 +687,12 @@ Burrow Game::createBurrow(const osg::Vec3& pos, const osg::Vec3& normal)
         ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
     }
 
-    auto p = pos + normal * 2;
     auto frame = new osg::MatrixTransform;
     osg::Matrix m = osg::Matrix::rotate(osg::Z_AXIS, normal);
-    m.postMultTranslate(p);
+    m.postMultTranslate(pos);
     frame->setMatrix(m);
     frame->addChild(graph);
-    return Burrow{false, -1, p, normal, frame};
+    return Burrow{false, normal, frame};
 }
 
 osgText::Text* createText(
@@ -751,14 +774,25 @@ osg::Node* Game::createUI()
     return root;
 }
 
-void Game::playKickAnimation(const osg::Vec3& pos)
+void Game::playWhackAnimation(const osg::Vec3& pos)
 {
     auto l = new Lightning;
-    l->setBillboardWidth(5);
-    l->setMaxJitter(0.17);
-    l->add("jjjjjjjj", pos + osg::Vec3(diskRand(5), 200), pos);
+    l->setNodeMask(nb_visible);
+    l->setBillboardWidth(8);
+    l->setMaxJitter(0.37);
+    l->add("jjjjjj", pos + osg::Vec3(diskRand(5), 168), pos);
+
+    auto startExponent = 0.5f;
+    auto exponent = new osg::Uniform("exponent", startExponent);
+    auto ss = l->getOrCreateStateSet();
+    ss->addUniform(exponent);
 
     _sceneRoot->addChild(l);
+    l->addUpdateCallback(osgf::createCallback([=](osg::Object* object, osg::Object* data) {
+        float v;
+        exponent->get(v);
+        exponent->set(v -= startExponent * sgg.getDeltaTime());
+    }));
     _sceneRoot->addUpdateCallback(osgf::createTimerRemoveNodeUpdateCallback(1, l));
 }
 
@@ -772,16 +806,16 @@ public:
         auto m = _mole->getMatrix();
         auto pos = m.getTrans();
 
-        if (pos.x() > 1)
+        if (pos.x() > 5)
         {
             if (!_mole->getKicked())
             {
                 _mole->setKicked(true);
 
                 auto l = new Lightning;
-                l->setBillboardWidth(5);
-                l->setMaxJitter(0.17);
-                l->add("jjjjjjjj", pos + osg::Vec3(diskRand(5), 100), pos);
+                l->setBillboardWidth(10);
+                l->setMaxJitter(0.37);
+                l->add("jjjjjj", pos + osg::Vec3(diskRand(5), 100), pos);
 
                 playSound(_mole, new ALSource(osgDB::readALBufferFile("sound/hit.wav")));
 
@@ -791,7 +825,7 @@ public:
         else
         {
             auto dt = sgg.getDeltaTime();
-            m.postMultTranslate(osg::Vec3(1, 0, 0) * dt);
+            m.postMultTranslate(osg::Vec3(3, 0, 0) * dt);
             _mole->setMatrix(m);
         }
 

@@ -35,6 +35,7 @@ public:
 private:
     Lightning* _lightning = 0;
 };
+osg::ref_ptr<osg::Program> Lightning::_billboardProgram;
 
 Lightning::Lightning()
 {
@@ -59,11 +60,6 @@ Lightning::Lightning()
     ss->setAttributeAndModes(new osg::BlendFunc(GL_ONE, GL_ONE));
     ss->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::RGBA_MAX));
     ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-
-    // render it as billboard, create faces along lines
-    _billboardProgram = sgg.createProgram("shader/lightning_billboard.vert",
-        "shader/lightning_billboard.geom", "shader/lightning_billboard.frag", GL_LINES,
-        GL_TRIANGLE_STRIP, 12);
 
     setBillboardType(bt_per_line);
     setBillboard(true);
@@ -130,11 +126,20 @@ void Lightning::setBillboard(bool v)
     auto ss = getOrCreateStateSet();
     if (_billboard)
     {
-        ss->setAttributeAndModes(_billboardProgram);
         setBillboardWidth(_billboardWidth);
         setCenterColor(_centerColor);
         setBorderColor(_borderColor);
         setExponent(_exponent);
+
+        if (!_billboardProgram)
+        {
+            // render it as billboard, create faces along lines
+            _billboardProgram = sgg.createProgram("shader/lightning_billboard.vert",
+                "shader/lightning_billboard.geom", "shader/lightning_billboard.frag", GL_LINES,
+                GL_TRIANGLE_STRIP, 12);
+        }
+        ss->setAttributeAndModes(_billboardProgram);
+
     }
     else
     {
