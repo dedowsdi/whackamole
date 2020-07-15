@@ -424,7 +424,7 @@ void Game::restart()
     auto cm = dynamic_cast<osgGA::OrbitManipulator*>(_viewer->getCameraManipulator());
     cm->home(0);
     osg::Quat q;
-    q.makeRotate(osg::PI / 3, osg::X_AXIS);
+    q.makeRotate(osg::PI * 0.4, osg::X_AXIS);
     cm->setRotation(q);
 }
 
@@ -849,7 +849,7 @@ void Game::createStarfield()
     // add moon
     auto radius = 1000;
     {
-        auto pos = osg::Vec3(-1, 1, 0.5);
+        auto pos = osg::Vec3(-10, 100, 0.01);
         pos.normalize();
         pos *= radius;
 
@@ -869,7 +869,7 @@ void Game::createStarfield()
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
 
-        auto program = createProgram("shader/moon.frag", osg::Shader::FRAGMENT);
+        static auto program = createProgram("shader/moon.frag", osg::Shader::FRAGMENT);
         rootSS->setAttributeAndModes(program);
 
         projNode->addChild(moon);
@@ -899,7 +899,7 @@ void Game::createStarfield()
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
 
-        auto program = createProgram("shader/star.vert", "shader/star.frag");
+        static auto program = createProgram("shader/star.vert", "shader/star.frag");
         ss->setAttributeAndModes(program);
 
         projNode->addChild(stars);
