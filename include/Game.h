@@ -147,6 +147,8 @@ private:
 
     void playWhackAnimation(const osg::Vec3& pos);
 
+    void popScore(const osg::Vec3& pos, int score);
+
     void createStartAnimation();
 
     game_status _status = gs_init;

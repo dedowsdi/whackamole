@@ -37,7 +37,7 @@
 namespace toy
 {
 
-const int burrows = 8;
+// TODO load this options from cfg file.
 const float sceneRadius = 128;
 const float sceneHeight = 32;
 const int terrainCols = 65;
@@ -226,7 +226,7 @@ bool Game::run(osg::Object* object, osg::Object* data)
 
     if (_status == gs_running)
     {
-        auto newMole = toy::unitRand() > 0.99;
+        auto newMole = toy::unitRand() > 0.985;
         if (newMole)
         {
             popMole();
@@ -296,18 +296,22 @@ void Game::popMole()
 
     auto animPath = new osg::AnimationPath;
     animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
-    osgf::addControlPoints(
-        *animPath, 2, 0, 1, mole->getMatrix(), rot * osg::Matrix::translate(endPos));
-    osgf::addControlPoints(
-        *animPath, 2, 1, 2, rot * osg::Matrix::translate(endPos), mole->getMatrix(), false);
+
+    auto duration = linearRand(0.8f, 1.6f);
+    mole->setScore(100 * duration / 0.8f);
+
+    osgf::addControlPoints(*animPath, 2, 0, duration * 0.5f, mole->getMatrix(),
+        rot * osg::Matrix::translate(endPos));
+    osgf::addControlPoints(*animPath, 2, duration * 0.5f, duration,
+        rot * osg::Matrix::translate(endPos), mole->getMatrix(), false);
 
     auto apc = new osg::AnimationPathCallback;
     apc->setAnimationPath(animPath);
     mole->setUpdateCallback(apc);
 
     _sceneRoot->addChild(mole);
-    _sceneRoot->addUpdateCallback(
-        osgf::createTimerUpdateCallback(2, [=](osg::Object* object, osg::Object* data) {
+    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(
+        duration + 0.1, [=](osg::Object* object, osg::Object* data) {
             if (!mole->getKicked())
                 sgg.removeMole(mole);
         }));
@@ -320,7 +324,10 @@ void Game::whackMole(Mole* mole)
     mole->setKicked(true);
     mole->getBurrow()->active = false;
     mole->setNodeMask(nb_visible);
-    playWhackAnimation(mole->getMatrix().getTrans());
+
+    auto pos = mole->getMatrix().getTrans();
+    playWhackAnimation(pos);
+    popScore(pos, mole->getScore());
 
     auto sound = new ALSource(osgDB::readALBufferFile("sound/hit.wav"));
     playSound(mole->getBurrow()->node, sound);
@@ -794,6 +801,25 @@ void Game::playWhackAnimation(const osg::Vec3& pos)
         exponent->set(v -= startExponent * sgg.getDeltaTime());
     }));
     _sceneRoot->addUpdateCallback(osgf::createTimerRemoveNodeUpdateCallback(1, l));
+}
+
+void Game::popScore(const osg::Vec3& pos, int score)
+{
+    auto text = createText("PopScore", std::to_string(score), 22, pos);
+    text->setAlignment(osgText::Text::CENTER_CENTER);
+    text->setCharacterSizeMode(osgText::Text::SCREEN_COORDS);
+    text->setColor(osg::Vec4(1, 0, 0, 1));
+    text->setAutoRotateToScreen(true);
+
+    auto ss = text->getOrCreateStateSet();
+    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+
+    text->addUpdateCallback(osgf::createCallback([=](auto obj, auto data) {
+        text->setPosition(text->getPosition() + osg::Vec3(0, 0, 10) * sgg.getDeltaTime());
+    }));
+
+    _sceneRoot->addChild(text);
+    _sceneRoot->addUpdateCallback(osgf::createTimerRemoveNodeUpdateCallback(1, text));
 }
 
 class StartAnimationUpdater : public osg::Callback
