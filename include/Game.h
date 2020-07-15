@@ -131,11 +131,11 @@ private:
 
     ~Game();
 
-    osg::Node* createTerrain();
+    void createTerrain();
 
-    osg::Node* createMeadow();
+    void createMeadow();
 
-    osg::Node* createOverallMeadow();
+    void createOverallMeadow();
 
     std::pair<osg::Vec3, osg::Vec3> getTerrainPoint(float x, float y);
 
@@ -144,6 +144,8 @@ private:
     Burrow createBurrow(const osg::Vec3& pos, const osg::Vec3& normal);
 
     osg::Node* createUI();
+
+    void createStarfield();
 
     void playWhackAnimation(const osg::Vec3& pos);
 

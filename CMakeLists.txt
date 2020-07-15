@@ -62,7 +62,6 @@ set(SRC
     src/ToyCopyOp.cpp
     src/ToyViewer.cpp
     src/main.cpp
-    src/Screw.cpp
     )
 
 add_executable(whackamole ${SRC})

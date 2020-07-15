@@ -17,6 +17,7 @@
 #include <osg/io_utils>
 #include <osgDB/ReadFile>
 #include <osgGA/GUIEventHandler>
+#include <osgGA/OrbitManipulator>
 #include <osgTerrain/GeometryTechnique>
 #include <osgTerrain/Layer>
 #include <osgTerrain/Locator>
@@ -25,12 +26,13 @@
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
 #include <osgViewer/Viewer>
-#include <osgGA/OrbitManipulator>
+#include <osg/Point>
+#include <osg/PointSprite>
 
-#include <Lightning.h>
 #include <ALBuffer.h>
 #include <ALSource.h>
 #include <DB.h>
+#include <Lightning.h>
 #include <Math.h>
 #include <OsgFactory.h>
 #include <OsgQuery.h>
@@ -50,6 +52,7 @@ const float moleSize = 10;
 // const int numGrass = 128;
 const float grassSize = 10;
 const float explosionForce = 10;
+const int numStars = 1024;
 
 osg::Vec3 Burrow::getTopCenter()
 {
@@ -210,7 +213,6 @@ osg::Node* Mole::getBurnedModel()
                 ss->setAttributeAndModes(
                     mtl, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
             }
-
         }
 
         _burnedModel = burned;
@@ -228,7 +230,7 @@ bool Game::run(osg::Object* object, osg::Object* data)
 
     if (_status == gs_running)
     {
-        auto newMole = toy::unitRand() > 0.985;
+        auto newMole = toy::unitRand() > 0.98;
         if (newMole)
         {
             popMole();
@@ -255,8 +257,10 @@ void Game::createScene()
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
 
-    _explosions.resize(16);
     createStartAnimation();
+    auto camera = getMainCamera();
+    camera->setCullingMode(
+        camera->getCullingMode() & ~osg::CullSettings::SMALL_FEATURE_CULLING);
 }
 
 void Game::popMole()
@@ -302,12 +306,14 @@ void Game::popMole()
     auto animPath = new osg::AnimationPath;
     animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
 
-    auto duration = linearRand(0.8f, 1.6f);
-    mole->setScore(100 * duration / 0.8f);
+    auto duration = linearRand(1.0f, 2.0f);
+    mole->setScore(100 * duration / 1.0f);
 
-    osgf::addControlPoints(*animPath, 2, 0, duration * 0.5f, mole->getMatrix(),
+    osgf::addControlPoints(*animPath, 2, 0, duration * 0.35f, mole->getMatrix(),
         rot * osg::Matrix::translate(endPos));
-    osgf::addControlPoints(*animPath, 2, duration * 0.5f, duration,
+    osgf::addControlPoints(*animPath, 2, duration * 0.35f, duration * 0.65f,
+        rot * osg::Matrix::translate(endPos), rot * osg::Matrix::translate(endPos));
+    osgf::addControlPoints(*animPath, 2, duration * 0.65f, duration,
         rot * osg::Matrix::translate(endPos), mole->getMatrix(), false);
 
     auto apc = new osg::AnimationPathCallback;
@@ -392,11 +398,17 @@ void Game::restart()
 
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
     _sceneRoot->setUpdateCallback(0);
-    _sceneRoot->addChild(createTerrain());
-    _sceneRoot->addChild(createMeadow());
+
+    auto camera = getMainCamera();
+    camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
+
+    createStarfield();
+    createTerrain();
+    createMeadow();
 
     _burrowList.clear();
     createBurrows();
+    _explosions.assign(16, osg::Vec4());
 
     _msg->setNodeMask(0);
     _timer = 60;
@@ -437,7 +449,7 @@ Game::Game() {}
 
 Game::~Game() {}
 
-osg::Node* Game::createTerrain()
+void Game::createTerrain()
 {
     _heightField = new osg::HeightField;
 
@@ -494,8 +506,7 @@ osg::Node* Game::createTerrain()
     material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.5, 0.5, 0.5, 0.5));
     ss->setAttributeAndModes(material);
 
-    // return new osg::ShapeDrawable(_heightField);
-    return _terrain;
+    _sceneRoot->addChild(_terrain);
 }
 
 osg::Geometry* createGrass()
@@ -541,7 +552,7 @@ osg::Geometry* createGrass()
     return geometry;
 }
 
-osg::Node* Game::createMeadow()
+void Game::createMeadow()
 {
     auto root = new osg::Group;
     root->setNodeMask(nb_visible);
@@ -610,16 +621,16 @@ osg::Node* Game::createMeadow()
         for (auto i = 0; i < _explosions.size(); ++i)
         {
             auto& e = _explosions[i];
-            osg::Vec4 v = osg::Vec4(e.x(), e.y(), e.z(), 1) *  viewMatrix;
+            osg::Vec4 v = osg::Vec4(e.x(), e.y(), e.z(), 1) * viewMatrix;
             v.w() = e.w();
             uf->setElement(i, v);
         }
     }));
 
-    return root;
+    _sceneRoot->addChild(root);
 }
 
-osg::Node* Game::createOverallMeadow()
+void Game::createOverallMeadow()
 {
     auto geometry = new osg::Geometry;
     auto vertices = new osg::Vec3Array(osg::Array::BIND_PER_VERTEX);
@@ -687,7 +698,7 @@ osg::Node* Game::createOverallMeadow()
     ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
     // ss->setMode(GL_BLEND, osg::StateAttribute::ON);
 
-    return geometry;
+    _sceneRoot->addChild(geometry);
 }
 
 std::pair<osg::Vec3, osg::Vec3> Game::getTerrainPoint(float x, float y)
@@ -817,6 +828,84 @@ osg::Node* Game::createUI()
     auto ss = root->getOrCreateStateSet();
 
     return root;
+}
+
+void Game::createStarfield()
+{
+    auto root = new osg::Group;
+    root->setNodeMask(nb_visible);
+    root->setName("Starfield");
+
+    auto rootSS = root->getOrCreateStateSet();
+
+    // render it between opaque and transparent
+    rootSS->setAttributeAndModes(new osg::Depth(osg::Depth::LEQUAL, 1.0f, 1.0f, false));
+    rootSS->setRenderBinDetails(5, "RenderBin");
+    rootSS->setMode(GL_BLEND, osg::StateAttribute::ON);
+
+    auto projNode = new osg::Projection(createDefaultProjectionMatrix(0.1, 10000));
+    root->addChild(projNode);
+
+    // add moon
+    auto radius = 1000;
+    {
+        auto pos = osg::Vec3(-1, 1, 0.5);
+        pos.normalize();
+        pos *= radius;
+
+        auto moon = osgf::createPoints({pos});
+        moon->setName("Moon");
+        moon->setCullingActive(false);
+        moon->setComputeBoundingBoxCallback(
+            static_cast<osg::Drawable::ComputeBoundingBoxCallback*>(
+                osgf::getInvalidComputeBoundingBoxCallback()));
+
+        auto point = new osg::Point(128);
+        point->setMaxSize(1024);
+
+        auto ss = moon->getOrCreateStateSet();
+        ss->setAttributeAndModes(point);
+        ss->setTextureAttributeAndModes(0, new osg::PointSprite());
+        ss->setAttributeAndModes(new osg::BlendFunc(
+            osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+
+        auto program = createProgram("shader/moon.frag", osg::Shader::FRAGMENT);
+        rootSS->setAttributeAndModes(program);
+
+        projNode->addChild(moon);
+    }
+
+    // add stars
+    {
+        auto stars = new osg::Geometry;
+        auto vertices = new osg::Vec4Array(osg::Array::BIND_PER_VERTEX);
+        vertices->reserve(numStars);
+        for (auto i = 0; i < numStars; ++i)
+        {
+            auto pos = sphericalRand(radius);
+            vertices->push_back(osg::Vec4(pos, linearRand(0.0f, 0.5f)));
+        }
+
+        stars->setVertexArray(vertices);
+        stars->addPrimitiveSet(new osg::DrawArrays(GL_POINTS, 0, vertices->size()));
+        stars->setCullingActive(false);
+        stars->setComputeBoundingBoxCallback(
+            static_cast<osg::Drawable::ComputeBoundingBoxCallback*>(
+                osgf::getInvalidComputeBoundingBoxCallback()));
+
+        auto ss = stars->getOrCreateStateSet();
+        ss->setAttributeAndModes(new osg::Point(12));
+        ss->setTextureAttributeAndModes(0, new osg::PointSprite());
+        ss->setAttributeAndModes(new osg::BlendFunc(
+            osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+
+        auto program = createProgram("shader/star.vert", "shader/star.frag");
+        ss->setAttributeAndModes(program);
+
+        projNode->addChild(stars);
+    }
+
+    _sceneRoot->addChild(root);
 }
 
 void Game::playWhackAnimation(const osg::Vec3& pos)
