@@ -18,5 +18,6 @@ void main(void)
         discard;
 
     float f = 0.07f / pow(l, exponent);
+    f *= pow(1 - sqrt(l) / 0.5, 0.49);
     gl_FragColor = vec4(f);
 }

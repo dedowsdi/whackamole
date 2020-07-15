@@ -16,13 +16,13 @@
 #include <osg/MatrixTransform>
 #include <osg/Shape>
 #include <osg/ShapeDrawable>
+#include <osg/os_utils>
 #include <osgDB/ReadFile>
 #include <osgDB/ReaderWriter>
 #include <osgGA/StateSetManipulator>
+#include <osgGA/TrackballManipulator>
 #include <osgViewer/Viewer>
 #include <osgViewer/ViewerEventHandlers>
-#include <osg/os_utils>
-#include <osgGA/TrackballManipulator>
 
 #include <ALContext.h>
 #include <ALListener.h>
@@ -59,6 +59,12 @@ int main(int argc, char* argv[])
     // f2   Print scene
     // f3   Print render stages
     // f4   Save main camera to main.osgt
+    // p    capture screen
+    // 7    toggle lighting
+    // 8    toggle backface culling
+    // 9    toggle texture
+    // 0    Toggle polygon mode
+
     viewer.addEventHandler(new toy::DebugHandler(viewer.getCamera()));
 
     auto statsHandler = new osgViewer::StatsHandler;
@@ -66,6 +72,10 @@ int main(int argc, char* argv[])
 
     viewer.addEventHandler(statsHandler);
     viewer.addEventHandler(new toy::ViewerDebugHandler(&viewer));
+
+    auto scHander = new osgViewer::ScreenCaptureHandler;
+    scHander->setKeyEventTakeScreenShot(osgGA::GUIEventAdapter::KEY_P);
+    viewer.addEventHandler(scHander);
 
     auto statesetHandler =
         new osgGA::StateSetManipulator(sgg.getRoot()->getOrCreateStateSet());
