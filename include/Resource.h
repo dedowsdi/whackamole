@@ -35,7 +35,13 @@ public:
     void setFile(const std::string& v) { _file = v; }
 
 private:
+
+#ifdef WIN32
+    time_t _mtime = 0;
+#else
     timespec _mtime = {0, 0};
+#endif
+
     std::string _file;
     ModifiedCallback _callback;
 };

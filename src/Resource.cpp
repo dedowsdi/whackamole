@@ -49,15 +49,19 @@ const char* statErrorToString(int errorNumber)
     }
 }
 
-timespec getLastModifyTime(const std::string& file)
+auto getLastModifyTime(const std::string& file)
 {
     struct stat statbuf;
     if (stat(file.c_str(), &statbuf) != 0)
     {
         throw StatError(std::string("stat failed with ") + statErrorToString(errno));
     }
-
+#ifdef WIN32
+    return statbuf.st_mtime;
+#else
     return statbuf.st_mtim;
+#endif
+
 }
 
 Resource::Resource(const std::string& file, ModifiedCallback ModifiedCallback)
@@ -75,8 +79,13 @@ bool Resource::check()
     try
     {
         // reload supershape if file changed
+#ifdef WIN32
+        auto mtime = getLastModifyTime(_file);
+        if (mtime != _mtime)
+#else
         auto mtime = getLastModifyTime(_file);
         if (mtime.tv_nsec != _mtime.tv_nsec)
+#endif
         {
             _mtime = mtime;
             invokeCallback();
