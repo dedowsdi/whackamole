@@ -41,6 +41,9 @@ find_package(OpenSceneGraph REQUIRED COMPONENTS
     )
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FREEALUT REQUIRED freealut)
+if(WIN32)
+    link_directories(${FREEALUT_LIBRARY_DIRS})
+endif()
 
 include_directories(
     ${OPENSCENEGRAPH_INCLUDE_DIRS}
