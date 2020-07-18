@@ -47,6 +47,7 @@ std::string to_string(osgUtil::RenderBin::SortMode mode)
     }
 }
 
+#ifdef PRINT_STAGE
 RenderStagePrinter::RenderStagePrinter(std::ostream& out) : _out(out) {}
 
 void RenderStagePrinter::drawImplementation(
@@ -495,7 +496,6 @@ osg::StateAttribute::Type stringToStateAttributeType(const std::string& s)
         throw std::runtime_error("Unknown StateAttribute type string : " + s);
 }
 
-
 void RenderStagePrinter::printStateset(const osg::StateSet* ss)
 {
     if (!ss)
@@ -524,6 +524,7 @@ void RenderStagePrinter::printStateset(const osg::StateSet* ss)
         }
     }
 }
+#endif
 
 namespace
 {
@@ -573,7 +574,9 @@ void VerbosePrintVisitor::apply(osg::Node& node)
 
 DebugHandler::DebugHandler(osg::Camera* camera)
 {
+#ifdef PRINT_STAGE
     _renderStagePrinter = new RenderStagePrinter(std::cout);
+#endif
     setCamera(camera);
 }
 
@@ -592,10 +595,11 @@ bool DebugHandler::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdap
                     _camera->accept(visitor);
                     break;
                 }
-
+#ifdef PRINT_STAGE
                 case osgGA::GUIEventAdapter::KEY_F3:
                     _renderStagePrinter->setEnabled(true);
                     break;
+#endif
 
                 case osgGA::GUIEventAdapter::KEY_F4:
                     osgDB::writeNodeFile(*_camera, "main.osgt",
@@ -615,6 +619,7 @@ bool DebugHandler::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdap
 void DebugHandler::setCamera(osg::Camera* v)
 {
     _camera = v;
+#ifdef PRINT_STAGE
     auto renderer = dynamic_cast<osgViewer::Renderer*>(_camera->getRenderer());
     if (renderer)
     {
@@ -623,6 +628,7 @@ void DebugHandler::setCamera(osg::Camera* v)
     }
 
     // TODO slave cameras?
+#endif
 }
 
 }  // namespace toy

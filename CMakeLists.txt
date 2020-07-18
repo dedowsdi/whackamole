@@ -17,7 +17,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-option(BUILD_TEST "Build test" OFF)
+option(PRINT_STAGE "Print rener stage in DebugHander" OFF)
+
+if(PRINT_STAGE)
+    add_definitions(-DPRINT_STAGE)
+endif()
 
 find_package(OpenGL REQUIRED)
 find_package(OpenAL REQUIRED)

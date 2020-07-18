@@ -14,6 +14,8 @@
 namespace toy
 {
 
+#ifdef PRINT_STAGE
+
 // Recursively print render leaves.
 class RenderStagePrinter : public osgUtil::RenderBin::DrawCallback
 {
@@ -59,6 +61,8 @@ private:
     RenderBinStack _bins;
 };
 
+#endif  // PRINT_STAGE
+
 class VerbosePrintVisitor : public osgUtil::PrintVisitor
 {
 public:
@@ -78,7 +82,9 @@ public:
 
 private:
     osg::Camera* _camera = 0;
+#ifdef PRINT_STAGE
     osg::ref_ptr<RenderStagePrinter> _renderStagePrinter;
+#endif
 };
 
 }  // namespace toy
