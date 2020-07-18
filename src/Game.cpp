@@ -33,7 +33,7 @@
 #include <ALSource.h>
 #include <DB.h>
 #include <Lightning.h>
-#include <Math.h>
+#include <ToyMath.h>
 #include <OsgFactory.h>
 #include <OsgQuery.h>
 

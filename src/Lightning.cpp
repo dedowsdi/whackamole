@@ -15,7 +15,7 @@
 #include <osgDB/ReadFile>
 
 #include <Game.h>
-#include <Math.h>
+#include <ToyMath.h>
 #include <OsgFactory.h>
 
 namespace toy

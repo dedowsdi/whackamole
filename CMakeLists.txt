@@ -53,7 +53,7 @@ set(SRC
     src/DebugHandler.cpp
     src/Game.cpp
     src/Lightning.cpp
-    src/Math.cpp
+    src/ToyMath.cpp
     src/OsgFactory.cpp
     src/OsgQuery.cpp
     src/ReaderWriterAL.cpp
