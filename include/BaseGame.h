@@ -4,6 +4,7 @@
 #include <memory>
 #include <set>
 #include <vector>
+#include <string>
 
 #include <osg/Vec2>
 #include <osg/Vec3>
