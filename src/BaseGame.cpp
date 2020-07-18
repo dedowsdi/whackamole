@@ -2,24 +2,15 @@
 
 #include <cassert>
 
-#include <osg/AnimationPath>
-#include <osg/Billboard>
-#include <osg/BlendFunc>
-#include <osg/ClipPlane>
 #include <osg/Hint>
-#include <osg/LightModel>
-#include <osg/LineWidth>
-#include <osg/Material>
+#include <osg/MatrixTransform>
 #include <osgDB/ReadFile>
-#include <osgShadow/ShadowMap>
-#include <osgShadow/ShadowedScene>
 #include <osgViewer/Viewer>
 
 #include <ALBuffer.h>
 #include <ALContext.h>
 #include <ALListener.h>
 #include <ALSource.h>
-#include <Math.h>
 #include <OsgFactory.h>
 #include <OsgQuery.h>
 #include <Resource.h>

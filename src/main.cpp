@@ -9,29 +9,14 @@
 //      lawn
 //      burrows
 
-#include <osg/Billboard>
-#include <osg/ComputeBoundsVisitor>
 #include <osg/LightModel>
-#include <osg/Material>
-#include <osg/MatrixTransform>
-#include <osg/Shape>
-#include <osg/ShapeDrawable>
-#include <osg/os_utils>
-#include <osgDB/ReadFile>
-#include <osgDB/ReaderWriter>
 #include <osgGA/StateSetManipulator>
 #include <osgGA/TrackballManipulator>
 #include <osgViewer/Viewer>
 #include <osgViewer/ViewerEventHandlers>
 
-#include <ALContext.h>
-#include <ALListener.h>
-#include <ALSource.h>
-#include <DB.h>
 #include <DebugHandler.h>
 #include <Game.h>
-#include <Math.h>
-#include <OsgFactory.h>
 #include <ToyViewer.h>
 
 int main(int argc, char* argv[])
@@ -85,7 +70,6 @@ int main(int argc, char* argv[])
     statesetHandler->setKeyEventCyclePolygonMode('0');
 
     viewer.addEventHandler(statesetHandler);
-
     viewer.run();
 
     return 0;
