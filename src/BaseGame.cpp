@@ -23,6 +23,7 @@ void BaseGame::clear() {}
 void BaseGame::init(int argc, char* argv[], osgViewer::Viewer* viewer)
 {
     _viewer = viewer;
+    osg::DisplaySettings::instance()->setMinimumNumStencilBits(1);
     _viewer->realize();
 
     createRoots();

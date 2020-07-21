@@ -33,7 +33,6 @@ find_package(OpenSceneGraph REQUIRED COMPONENTS
     osgParticle
     osgFX
     osgShadow
-    osgWidget
     osgGA
     osgDB
     osgUtil
@@ -60,13 +59,14 @@ set(SRC
     src/DebugHandler.cpp
     src/Game.cpp
     src/Lightning.cpp
-    src/ToyMath.cpp
     src/OsgFactory.cpp
     src/OsgQuery.cpp
+    src/Outline.cpp
     src/ReaderWriterAL.cpp
     src/Resource.cpp
     src/SoundObjectManager.cpp
     src/ToyCopyOp.cpp
+    src/ToyMath.cpp
     src/ToyViewer.cpp
     src/main.cpp
     )

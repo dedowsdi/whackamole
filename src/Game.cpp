@@ -8,10 +8,14 @@
 #include <osg/BlendFunc>
 #include <osg/Camera>
 #include <osg/ComputeBoundsVisitor>
+#include <osg/CullFace>
 #include <osg/Depth>
 #include <osg/Geometry>
 #include <osg/Material>
 #include <osg/MatrixTransform>
+#include <osg/Point>
+#include <osg/PointSprite>
+#include <osg/PolygonMode>
 #include <osg/ShapeDrawable>
 #include <osg/Switch>
 #include <osg/io_utils>
@@ -26,16 +30,15 @@
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
 #include <osgViewer/Viewer>
-#include <osg/Point>
-#include <osg/PointSprite>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
 #include <DB.h>
 #include <Lightning.h>
-#include <ToyMath.h>
 #include <OsgFactory.h>
 #include <OsgQuery.h>
+#include <Outline.h>
+#include <ToyMath.h>
 
 namespace toy
 {
@@ -100,7 +103,7 @@ public:
                 break;
 
             case osgGA::GUIEventAdapter::MOVE:
-                sgg.highLightMole(getCursorMole(ea));
+                sgg.highlightMole(getCursorMole(ea));
                 break;
 
             default:
@@ -131,10 +134,21 @@ osg::BoundingBox Mole::_boundingbox;
 
 Mole::Mole(Burrow* burrow) : _burrow(burrow)
 {
+    auto outline = new Outline;
+    outline->setWidth(5);
+    outline->setColor(osg::Vec4(1, 0.5, 0, 1));
+    outline->setEnableCullFace(false);
+    outline->setPolygonModeFace(osg::PolygonMode::FRONT_AND_BACK);
+
+    outline->addChild(getModel());
+
     _switch = new osg::Switch;
     _switch->addChild(getModel(), true);
     _switch->addChild(getBurnedModel(), false);
+    _switch->addChild(outline, false);
+
     addChild(_switch);
+    setDataVariance(osg::Object::DYNAMIC);
 }
 
 void Mole::setKicked(bool v)
@@ -143,12 +157,19 @@ void Mole::setKicked(bool v)
     _switch->setSingleChildOn(v ? 1 : 0);
 }
 
+void Mole::setHighlighted(bool v)
+{
+    _highlighted = v;
+    _switch->setSingleChildOn(v ? 2 : 0);
+}
+
 osg::Node* Mole::getModel()
 {
     if (!_model)
     {
         auto node = osgDB::readNodeFile("model/mole.osgt");
 
+        // scale to moleSize
         osg::ComputeBoundsVisitor visitor;
         node->accept(visitor);
         auto bb = visitor.getBoundingBox();
@@ -165,6 +186,11 @@ osg::Node* Mole::getModel()
 
         auto ss = frame->getOrCreateStateSet();
         ss->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON);
+
+        // ss->setAttributeAndModes(
+        //     new osg::CullFace, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+
+        ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
 
         _model = frame;
     }
@@ -217,6 +243,7 @@ osg::Node* Mole::getBurnedModel()
 
         _burnedModel = burned;
     }
+    return getModel();
 
     return _burnedModel;
 }
@@ -261,6 +288,8 @@ void Game::createScene()
     auto camera = getMainCamera();
     camera->setCullingMode(
         camera->getCullingMode() & ~osg::CullSettings::SMALL_FEATURE_CULLING);
+    camera->setClearMask(camera->getClearMask() | GL_STENCIL_BUFFER_BIT);
+    camera->setClearStencil(0);
 }
 
 void Game::popMole()
@@ -335,6 +364,12 @@ void Game::whackMole(Mole* mole)
     mole->setKicked(true);
     mole->getBurrow()->active = false;
     mole->setNodeMask(nb_visible);
+    mole->setHighlighted(false);
+
+    if (_cursorMole.get() == mole)
+    {
+        _cursorMole = osg::ref_ptr<Mole>();
+    }
 
     auto pos = mole->getMatrix().getTrans();
 
@@ -372,18 +407,35 @@ void Game::whackMole(Mole* mole)
     OSG_INFO << "Whack " << mole->getName() << std::endl;
 }
 
+void Game::highlightMole(Mole* mole)
+{
+    if (mole == _cursorMole)
+        return;
+
+    if (_cursorMole)
+    {
+        _cursorMole->setHighlighted(false);
+    }
+
+    mole->setHighlighted(true);
+}
+
 void Game::removeMole(Mole* mole)
 {
     OSG_INFO << "Remove mole " << mole->getName() << std::endl;
     assert(mole->getNumParents() == 1);
+
+    if (_cursorMole.get() == mole)
+    {
+        _cursorMole = osg::ref_ptr<Mole>();
+    }
+
     if (!mole->getKicked())
     {
         mole->getBurrow()->active = false;
     }
     mole->getParent(0)->removeChild(mole);
 }
-
-void Game::highLightMole(Mole* mole) {}
 
 void Game::updateScore(const osg::Vec3& pos, int score)
 {
