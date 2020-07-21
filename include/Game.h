@@ -50,6 +50,9 @@ public:
     int getScore() const { return _score; }
     void setScore(int v) { _score = v; }
 
+    bool getHighlighted() const { return _highlighted; }
+    void setHighlighted(bool v);
+
     static osg::Node* getModel();
 
     static osg::Node* getBurnedModel();
@@ -60,6 +63,7 @@ private:
     static osg::BoundingBox _boundingbox;
 
     bool _kicked = false;
+    bool _highlighted = false;
     int _score = 100;
     Burrow* _burrow = 0;
     osg::ref_ptr<osg::Switch> _switch;
@@ -102,9 +106,9 @@ public:
 
     void whackMole(Mole* mole);
 
-    void removeMole(Mole* mole);
+    void highlightMole(Mole* mole);
 
-    void highLightMole(Mole* mole);
+    void removeMole(Mole* mole);
 
     void updateScore(const osg::Vec3& pos, int score);
 
@@ -166,6 +170,8 @@ private:
 
     int _score = 0;
     osg::ref_ptr<osgText::Text> _scoreText;
+
+    osg::ref_ptr<Mole> _cursorMole;
 
     osg::ref_ptr<osgText::Text> _msg;
     osg::ref_ptr<osg::HeightField> _heightField;
