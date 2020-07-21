@@ -11,6 +11,7 @@
 #include <osg/CullFace>
 #include <osg/Depth>
 #include <osg/Geometry>
+#include <osg/LineWidth>
 #include <osg/Material>
 #include <osg/MatrixTransform>
 #include <osg/Point>
@@ -29,6 +30,7 @@
 #include <osgTerrain/TerrainTile>
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
+#include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
 
 #include <ALBuffer.h>
@@ -55,6 +57,7 @@ const float moleSize = 10;
 // const int numGrass = 128;
 const float grassSize = 10;
 const float explosionForce = 10;
+const float cursorSize = 20;
 const int numStars = 1024;
 
 osg::Vec3 Burrow::getTopCenter()
@@ -71,6 +74,15 @@ public:
     {
         switch (ea.getEventType())
         {
+            case osgGA::GUIEventAdapter::FRAME:
+            {
+                auto mole = getCursorMole(ea);
+                sgg.highlightMole(mole);
+                sgg.moveCursor(ea.getX(), ea.getY());
+                sgg.flashCursor(mole != 0);
+            }
+            break;
+
             case osgGA::GUIEventAdapter::PUSH:
                 switch (ea.getButton())
                 {
@@ -103,7 +115,6 @@ public:
                 break;
 
             case osgGA::GUIEventAdapter::MOVE:
-                sgg.highlightMole(getCursorMole(ea));
                 break;
 
             default:
@@ -135,7 +146,7 @@ osg::BoundingBox Mole::_boundingbox;
 Mole::Mole(Burrow* burrow) : _burrow(burrow)
 {
     auto outline = new Outline;
-    outline->setWidth(5);
+    outline->setWidth(6);
     outline->setColor(osg::Vec4(1, 0.5, 0, 1));
     outline->setEnableCullFace(false);
     outline->setPolygonModeFace(osg::PolygonMode::FRONT_AND_BACK);
@@ -188,9 +199,11 @@ osg::Node* Mole::getModel()
         ss->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON);
 
         // ss->setAttributeAndModes(
-        //     new osg::CullFace, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        //     new osg::CullFace, osg::StateAttribute::OFF |
+        //     osg::StateAttribute::PROTECTED);
 
-        ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        ss->setMode(
+            GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
 
         _model = frame;
     }
@@ -290,6 +303,8 @@ void Game::createScene()
         camera->getCullingMode() & ~osg::CullSettings::SMALL_FEATURE_CULLING);
     camera->setClearMask(camera->getClearMask() | GL_STENCIL_BUFFER_BIT);
     camera->setClearStencil(0);
+
+    setUseCursor(false);
 }
 
 void Game::popMole()
@@ -417,7 +432,10 @@ void Game::highlightMole(Mole* mole)
         _cursorMole->setHighlighted(false);
     }
 
-    mole->setHighlighted(true);
+    if (mole)
+    {
+        mole->setHighlighted(true);
+    }
 }
 
 void Game::removeMole(Mole* mole)
@@ -485,6 +503,24 @@ void Game::timeout()
     show(_msg);
     _msg->setText("Press r to start new game.");
     _status = gs_timeout;
+}
+
+void Game::moveCursor(float x, float y)
+{
+    _cursorFrame->setMatrix(osg::Matrix::translate(osg::Vec3(x, y, 0)));
+}
+
+void Game::flashCursor(bool v)
+{
+    static bool lastFlash = false;
+    if (lastFlash == v)
+    {
+        return;
+    }
+    lastFlash = v;
+
+    auto ss = _cursorGeom->getOrCreateStateSet();
+    ss->getUniform("flash")->set(lastFlash ? 1 : 0);
 }
 
 void Game::hide(osg::Node* node)
@@ -870,14 +906,87 @@ osg::Node* Game::createUI()
     root->addChild(_msg);
     root->addChild(_timerText);
     root->addChild(_timerBar);
+    show(root);
 
     hide(_scoreText);
     hide(_timerText);
     hide(_timerBar);
 
-    _timerText->setNodeMask(0);
+    hide(_timerText);
 
-    auto ss = root->getOrCreateStateSet();
+    // create cursor
+    {
+        _cursorFrame = new osg::MatrixTransform;
+        _cursorFrame->setName("CursorFrame");
+        root->addChild(_cursorFrame);
+
+        // draw lightning cursorFrame, it's 3 + 3 vertices, symmetry by 0.5, 0.5
+        auto texcoords = new osg::Vec2Array();
+        auto tc0 = osg::Vec2(0.5, 1);
+        auto tc1 = osg::Vec2(0.25, 0.5);
+        auto tc2 = osg::Vec2(0.55, 0.4);
+        auto tc3 = osg::Vec2(1 - tc0.x(), 1 - tc0.y());
+        auto tc4 = osg::Vec2(1 - tc1.x(), 1 - tc1.y());
+        auto tc5 = osg::Vec2(1 - tc2.x(), 1 - tc2.y());
+        texcoords->push_back(tc0);
+        texcoords->push_back(tc1);
+        texcoords->push_back(tc2);
+        texcoords->push_back(tc3);
+        texcoords->push_back(tc4);
+        texcoords->push_back(tc5);
+        texcoords->push_back(tc0);
+
+        // Tesselator doesn't support Vec2Array
+        auto vertices = new osg::Vec3Array();
+        vertices->push_back(osg::Vec3((tc0 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+        vertices->push_back(osg::Vec3((tc1 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+        vertices->push_back(osg::Vec3((tc2 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+        vertices->push_back(osg::Vec3((tc3 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+        vertices->push_back(osg::Vec3((tc4 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+        vertices->push_back(osg::Vec3((tc5 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+        vertices->push_back(osg::Vec3((tc0 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
+
+        // body
+        {
+            _cursorGeom = new osg::Geometry;
+            _cursorGeom->setName("Cursor");
+
+            _cursorGeom->setVertexArray(vertices);
+            _cursorGeom->setTexCoordArray(0, texcoords);
+
+            _cursorGeom->addPrimitiveSet(
+                new osg::DrawArrays(GL_POLYGON, 0, vertices->size()));
+
+            osgUtil::Tessellator ts;
+            ts.setTessellationType(osgUtil::Tessellator::TESS_TYPE_POLYGONS);
+            ts.setWindingType(osgUtil::Tessellator::TESS_WINDING_POSITIVE);
+            ts.retessellatePolygons(*_cursorGeom);
+
+            auto ss = _cursorGeom->getOrCreateStateSet();
+            ss->setAttributeAndModes(
+                createProgram("shader/cursor.frag", osg::Shader::FRAGMENT));
+            ss->addUniform(new osg::Uniform("flash", 0));
+
+            _cursorFrame->addChild(_cursorGeom);
+        }
+
+        // outline
+        {
+            auto outline = new osg::Geometry;
+            outline->setName("CursorOutline");
+            outline->setVertexArray(vertices);
+
+            auto colors = new osg::Vec4Array(osg::Array::BIND_OVERALL);
+            colors->push_back(osg::Vec4(0.75, 0, 0, 1));
+            outline->setColorArray(colors);
+
+            outline->addPrimitiveSet(
+                new osg::DrawArrays(GL_LINE_STRIP, 0, vertices->size()));
+            osgf::addLineSmooth(*outline->getOrCreateStateSet(), 1);
+
+            _cursorFrame->addChild(outline);
+        }
+    }
 
     return root;
 }
@@ -1048,7 +1157,7 @@ public:
         else
         {
             auto dt = sgg.getDeltaTime();
-            m.postMultTranslate(osg::Vec3(3, 0, 0) * dt);
+            m.postMultTranslate(osg::Vec3(1, 0, 0) * dt);
             _mole->setMatrix(m);
         }
 

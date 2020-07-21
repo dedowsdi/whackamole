@@ -61,6 +61,9 @@ public:
 
     void setAllBoltsStartEnd(const osg::Vec3& start, const osg::Vec3& end);
 
+    bool getStable() const { return _stable; }
+    void setStable(bool v) { _stable = v; }
+
     struct Bolt
     {
         std::string pattern;
@@ -81,6 +84,7 @@ private:
 
     void updateUniforms();
 
+    bool _stable = true;
     bool _billboard = true;
     billboard_type _billboardType = bt_per_line_local;
     float _billboardWidth = 2;

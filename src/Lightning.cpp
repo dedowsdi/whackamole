@@ -81,7 +81,7 @@ void Lightning::add(int segments, const osg::Vec3& p0, const osg::Vec3& p1)
 
 void Lightning::resetLightning()
 {
-    if ( !_vertices->empty() ) return;
+    if ( !_vertices->empty() && _stable ) return;
 
     _vertices->clear();
 

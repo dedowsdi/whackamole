@@ -75,6 +75,7 @@ public:
     osg::Program* createProgram(const std::string& vertFile, const std::string& geomFile,
         const std::string& fragFile, int inputType, int outputType, int maxVertices);
 
+    void setUseCursor(bool b);
 
     void debugDrawLine(const osg::Vec3& from, const osg::Vec3& to,
         const osg::Vec4& fromColor, const osg::Vec4& toColor);

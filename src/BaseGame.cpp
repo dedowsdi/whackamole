@@ -104,6 +104,12 @@ osg::Program* BaseGame::createProgram(const std::string& vertFile, const std::st
     return prg;
 }
 
+void BaseGame::setUseCursor(bool b)
+{
+    static_cast<osgViewer::GraphicsWindow*>(osgq::getGraphicsWindow(*_viewer))
+        ->useCursor(false);
+}
+
 void BaseGame::debugDrawLine(const osg::Vec3& from, const osg::Vec3& to,
     const osg::Vec4& fromColor, const osg::Vec4& toColor)
 {

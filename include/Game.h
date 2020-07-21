@@ -12,7 +12,7 @@ namespace osg
 {
 class MatrixTransform;
 class HeightField;
-}
+}  // namespace osg
 
 namespace osgTerrain
 {
@@ -45,7 +45,7 @@ public:
     void setBurrow(Burrow* v) { _burrow = v; }
 
     bool getKicked() const { return _kicked; }
-    void setKicked(bool v); 
+    void setKicked(bool v);
 
     int getScore() const { return _score; }
     void setScore(int v) { _score = v; }
@@ -108,6 +108,8 @@ public:
 
     void highlightMole(Mole* mole);
 
+    void highlightCursor(bool b);
+
     void removeMole(Mole* mole);
 
     void updateScore(const osg::Vec3& pos, int score);
@@ -115,6 +117,10 @@ public:
     void restart();
 
     void timeout();
+
+    void moveCursor(float x, float y);
+
+    void flashCursor(bool v);
 
     game_status getStatus() const { return _status; }
     void setStatus(game_status v) { _status = v; }
@@ -172,6 +178,12 @@ private:
     osg::ref_ptr<osgText::Text> _scoreText;
 
     osg::ref_ptr<Mole> _cursorMole;
+
+    osg::ref_ptr<osg::MatrixTransform> _cursorFrame;
+    osg::ref_ptr<osg::Geometry> _cursorGeom;
+    osg::ref_ptr<osg::Program> _cursorProgram;
+
+    osg::ref_ptr<osg::Node> _cursor;
 
     osg::ref_ptr<osgText::Text> _msg;
     osg::ref_ptr<osg::HeightField> _heightField;
