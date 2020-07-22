@@ -23,6 +23,9 @@ void BaseGame::clear() {}
 void BaseGame::init(int argc, char* argv[], osgViewer::Viewer* viewer)
 {
     _viewer = viewer;
+
+    preInit();
+
     osg::DisplaySettings::instance()->setMinimumNumStencilBits(1);
     _viewer->realize();
 
@@ -31,6 +34,8 @@ void BaseGame::init(int argc, char* argv[], osgViewer::Viewer* viewer)
     createScene();
 
     createSound(argc, argv);
+
+    postInit();
 }
 
 osg::Vec2i BaseGame::getWindowSize()

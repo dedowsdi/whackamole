@@ -22,7 +22,9 @@
 #include <osg/io_utils>
 #include <osgDB/ReadFile>
 #include <osgGA/GUIEventHandler>
+#include <osgGA/KeySwitchMatrixManipulator>
 #include <osgGA/OrbitManipulator>
+#include <osgGA/TrackballManipulator>
 #include <osgTerrain/GeometryTechnique>
 #include <osgTerrain/Layer>
 #include <osgTerrain/Locator>
@@ -36,6 +38,7 @@
 #include <ALBuffer.h>
 #include <ALSource.h>
 #include <DB.h>
+#include <GhostManipulator.h>
 #include <Lightning.h>
 #include <OsgFactory.h>
 #include <OsgQuery.h>
@@ -109,6 +112,7 @@ public:
                     case osgGA::GUIEventAdapter::KEY_R:
                         sgg.restart();
                         break;
+
                     default:
                         break;
                 }
@@ -289,6 +293,30 @@ bool Game::run(osg::Object* object, osg::Object* data)
     return traverse(object, data);
 }
 
+void Game::preInit()
+{
+    osg::DisplaySettings::instance()->setMinimumNumStencilBits(1);
+
+    auto camera = getMainCamera();
+    camera->setCullingMode(
+        camera->getCullingMode() & ~osg::CullSettings::SMALL_FEATURE_CULLING);
+    camera->setClearMask(camera->getClearMask() | GL_STENCIL_BUFFER_BIT);
+    camera->setClearStencil(0);
+
+    auto ksm = new osgGA::KeySwitchMatrixManipulator;
+    ksm->addMatrixManipulator(
+        osgGA::GUIEventAdapter::KEY_F7, "Trackball", new osgGA::TrackballManipulator);
+    ksm->addMatrixManipulator(
+        osgGA::GUIEventAdapter::KEY_F8, "Ghost", new GhostManipulator);
+
+    _viewer->setCameraManipulator(ksm);
+}
+
+void Game::postInit()
+{
+    _viewer->home();
+}
+
 void Game::createScene()
 {
     _hudCamera->addChild(createUI());
@@ -297,11 +325,6 @@ void Game::createScene()
     _root->addEventCallback(new GameEventHandler);
 
     createStartAnimation();
-    auto camera = getMainCamera();
-    camera->setCullingMode(
-        camera->getCullingMode() & ~osg::CullSettings::SMALL_FEATURE_CULLING);
-    camera->setClearMask(camera->getClearMask() | GL_STENCIL_BUFFER_BIT);
-    camera->setClearStencil(0);
 
     setUseCursor(false);
 }
@@ -490,11 +513,15 @@ void Game::restart()
 
     _status = gs_running;
 
-    auto cm = dynamic_cast<osgGA::OrbitManipulator*>(_viewer->getCameraManipulator());
-    cm->home(0);
-    osg::Quat q;
-    q.makeRotate(osg::PI * 0.4, osg::X_AXIS);
-    cm->setRotation(q);
+    auto kcm =
+        static_cast<osgGA::KeySwitchMatrixManipulator*>(_viewer->getCameraManipulator());
+    kcm->selectMatrixManipulator(1);
+    auto manipulator = kcm->getCurrentMatrixManipulator();
+
+    auto tp = getTerrainPoint(0, -64);
+    tp.z() += 64;
+    manipulator->setHomePosition(tp, osg::Vec3(), osg::Z_AXIS);
+    _viewer->home();
 }
 
 void Game::timeout()
@@ -535,6 +562,33 @@ void Game::show(osg::Node* node)
 void Game::showReal(osg::Node* node)
 {
     node->setNodeMask(nb_visible | nb_raytest);
+}
+
+osg::Vec3 Game::getTerrainPoint(float x, float y)
+{
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
+    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
+    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
+    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
+
+    float h;
+    if (layer->getInterpolatedValue(ndcX, ndcY, h))
+        return osg::Vec3(x, y, h);
+    else
+        return osg::Vec3();
+}
+
+osg::Vec3 Game::getTerrainNormal(float x, float y)
+{
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
+    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
+    auto heightField = layer->getHeightField();
+
+    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
+    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
+    auto i = std::round(heightField->getNumColumns() * ndcX);
+    auto j = std::round(heightField->getNumColumns() * ndcY);
+    return _heightField->getNormal(i, j);
 }
 
 Game::Game() {}
@@ -591,6 +645,7 @@ void Game::createTerrain()
 
     _terrain = new osgTerrain::Terrain;
     tile->setTerrain(_terrain);
+    _terrain->addChild(tile);
 
     auto ss = _terrain->getOrCreateStateSet();
 
@@ -788,34 +843,6 @@ void Game::createOverallMeadow()
     // ss->setMode(GL_BLEND, osg::StateAttribute::ON);
 
     _sceneRoot->addChild(geometry);
-}
-
-osg::Vec3 Game::getTerrainPoint(float x, float y)
-{
-    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
-    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
-    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
-    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
-
-    float h;
-    if(layer->getInterpolatedValue(ndcX, ndcY, h))
-        return osg::Vec3(x, y, h);
-    else
-        return osg::Vec3();
-
-}
-
-osg::Vec3 Game::getTerrainNormal(float x, float y)
-{
-    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
-    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
-    auto heightField = layer->getHeightField();
-
-    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
-    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
-    auto i = std::round(heightField->getNumColumns() * ndcX);
-    auto j = std::round(heightField->getNumColumns() * ndcY);
-    return _heightField->getNormal(i, j);
 }
 
 void Game::createBurrows()

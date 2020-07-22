@@ -104,6 +104,10 @@ public:
 protected:
     virtual void createScene(){}
 
+    virtual void preInit(){}
+
+    virtual void postInit(){}
+
     void createSound(int argc, char* argv[]);
 
     void createRoots();

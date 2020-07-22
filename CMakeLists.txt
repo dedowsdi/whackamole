@@ -58,6 +58,7 @@ set(SRC
     src/DB.cpp
     src/DebugHandler.cpp
     src/Game.cpp
+    src/GhostManipulator.cpp
     src/Lightning.cpp
     src/OsgFactory.cpp
     src/OsgQuery.cpp

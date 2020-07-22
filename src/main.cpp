@@ -44,6 +44,10 @@ int main(int argc, char* argv[])
     // f2   Print scene
     // f3   Print render stages
     // f4   Save main camera to main.osgt
+    // f7   Trackball manipulator
+    // f8   Ghost manipulator
+    // f9   Pause/Continue
+    // f10  Step one frame
     // p    capture screen
     // 7    toggle lighting
     // 8    toggle backface culling

@@ -100,6 +100,10 @@ public:
 
     bool run(osg::Object* object, osg::Object* data) override;
 
+    void preInit() override;
+
+    void postInit() override;
+
     void createScene() override;
 
     void popMole();
@@ -139,6 +143,12 @@ public:
     // visible | raytest
     void showReal(osg::Node* node);
 
+    // interpolated point
+    osg::Vec3 getTerrainPoint(float x, float y);
+
+    // 4 point normal of the closest control point
+    osg::Vec3 getTerrainNormal(float x, float y);
+
 private:
     Game();
 
@@ -149,12 +159,6 @@ private:
     void createMeadow();
 
     void createOverallMeadow();
-
-    // interpolated point
-    osg::Vec3 getTerrainPoint(float x, float y);
-
-    // 4 point normal of the closest control point
-    osg::Vec3 getTerrainNormal(float x, float y);
 
     void createBurrows();
 
