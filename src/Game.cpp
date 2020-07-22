@@ -259,7 +259,7 @@ bool Game::run(osg::Object* object, osg::Object* data)
 
     if (_status == gs_running)
     {
-        auto newMole = toy::unitRand() > 0.98;
+        auto newMole = toy::unitRand() < _popRate;
         if (newMole)
         {
             popMole();
@@ -359,7 +359,8 @@ void Game::popMole()
     auto animPath = new osg::AnimationPath;
     animPath->setLoopMode(osg::AnimationPath::NO_LOOPING);
 
-    auto duration = linearRand(1.0f, 2.0f);
+    auto durationRange = sgc.getVec2("mole.durationRange");
+    auto duration = linearRand(durationRange.x(), durationRange.y());
     mole->setScore(100 * duration / 1.0f);
 
     osgf::addControlPoints(*animPath, 2, 0, duration * 0.35f, mole->getMatrix(),
@@ -474,6 +475,7 @@ void Game::restart()
     sgc.reload();
     _sceneRadius = sgc.getFloat("scene.radius");
     _sceneHeight = sgc.getFloat("scene.height");
+    _popRate = sgc.getFloat("mole.popRate");
 
     _score = 0;
     _scoreText->setText("0");
@@ -580,7 +582,7 @@ osg::Vec3 Game::getTerrainNormal(float x, float y)
     auto ndcX = (x + _sceneRadius) * 0.5 / _sceneRadius;
     auto ndcY = (y + _sceneRadius) * 0.5 / _sceneRadius;
     auto i = std::round(heightField->getNumColumns() * ndcX);
-    auto j = std::round(heightField->getNumColumns() * ndcY);
+    auto j = std::round(heightField->getNumRows() * ndcY);
     return _heightField->getNormal(i, j);
 }
 
@@ -592,10 +594,12 @@ void Game::createTerrain()
 {
     _heightField = new osg::HeightField;
 
+    // make sure no scale happens between heightfiled and heightfield layer, otherwise
+    // HeightField::getNormal will broke
     auto rows = sgc.getInt("terrain.rows");
     auto cols = sgc.getInt("terrain.cols");
-    auto xInterval = 1;
-    auto yInterval = 1;
+    auto xInterval = _sceneRadius * 2 / cols;
+    auto yInterval = _sceneRadius * 2 / rows;
 
     _heightField->allocate(rows, cols);
     _heightField->setXInterval(xInterval);
@@ -848,13 +852,15 @@ void Game::createBurrows()
 {
     auto maxCenter = _sceneRadius - sgc.getFloat("burrow.radius");
     auto spawnRadius = sgc.getFloat("burrow.spawnRadius") * _sceneRadius;
-    auto points = poissonDiskSample(
-        osg::Vec2(-spawnRadius, -spawnRadius), osg::Vec2(spawnRadius, spawnRadius), 40, 32);
+    auto spawnDistance = sgc.getFloat("burrow.spawnDistance");
+    auto points = poissonDiskSample(osg::Vec2(-spawnRadius, -spawnRadius),
+        osg::Vec2(spawnRadius, spawnRadius), spawnDistance, 32);
 
     for (auto& p: points)
     {
         auto point = getTerrainPoint(p.x(), p.y());
         auto normal = getTerrainNormal(p.x(), p.y());
+        normal.normalize();
         auto burrow = createBurrow(point, normal);
         _sceneRoot->addChild(burrow.node);
         _burrowList.push_back(burrow);

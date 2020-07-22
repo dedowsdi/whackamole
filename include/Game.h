@@ -183,8 +183,9 @@ private:
     float _timer = 30;
     float _totalTime = 30;
 
-    float _sceneRadius;
-    float _sceneHeight;
+    float _sceneRadius = 128;
+    float _sceneHeight = 128;
+    float _popRate = 0.002;
 
     osg::ref_ptr<osgText::Text> _timerText;
     osg::ref_ptr<osg::Node> _timerBar;
