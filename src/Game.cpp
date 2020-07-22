@@ -1062,12 +1062,13 @@ void Game::createStarfield()
 
     // add moon
     auto radius = sgc.getFloat("starfield.radius");
+    auto radius2 = radius * radius;
+    auto moonPos = sgc.getVec3("starfield.moon.pos");
+    moonPos.normalize();
+    moonPos *= radius;
     {
-        auto pos = sgc.getVec3("starfield.moon.pos");
-        pos.normalize();
-        pos *= radius;
 
-        auto moon = osgf::createPoints({pos});
+        auto moon = osgf::createPoints({moonPos});
         moon->setName("Moon");
         moon->setCullingActive(false);
         moon->setComputeBoundingBoxCallback(
@@ -1098,6 +1099,10 @@ void Game::createStarfield()
         for (auto i = 0; i < numStars; ++i)
         {
             auto pos = sphericalRand(radius);
+            if ((pos - moonPos).length2() < radius2 * 0.01f)
+            {
+                continue;
+            }
             vertices->push_back(osg::Vec4(pos, linearRand(0.0f, 0.5f)));
         }
 
