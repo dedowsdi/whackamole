@@ -49,6 +49,8 @@
 namespace toy
 {
 
+#define TOY_INFO OSG_INFO
+
 osg::Vec3 Burrow::getTopCenter()
 {
     return osg::Vec3(0, 0, sgc.getFloat("burrow.height") * 0.5f) * node->getMatrix();
@@ -375,11 +377,11 @@ void Game::popMole()
     mole->setUpdateCallback(apc);
 
     _sceneRoot->addChild(mole);
-    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(
-        duration + 0.1, [=](osg::Object* object, osg::Object* data) {
-            if (!mole->getKicked())
-                sgg.removeMole(mole);
-        }));
+    auto removeCallback = osgf::createTimerUpdateCallback(
+        duration, [=](osg::Object* object, osg::Object* data) { sgg.removeMole(mole); });
+    _sceneRoot->addUpdateCallback(removeCallback);
+    _removeMoleCallbacks.insert(std::make_pair(mole, removeCallback));
+    TOY_INFO << "pop mole " << mole->getName() << " " << mole << std::endl;
 }
 
 void Game::whackMole(Mole* mole)
@@ -389,6 +391,10 @@ void Game::whackMole(Mole* mole)
     show(mole);
     mole->setKicked(true);
     mole->getBurrow()->active = false;
+
+    auto removeCallback = _removeMoleCallbacks.find(mole);
+    assert(removeCallback != _removeMoleCallbacks.end());
+    _sceneRoot->removeUpdateCallback(removeCallback->second);
 
     if (_cursorMole.get() == mole)
     {
@@ -428,7 +434,7 @@ void Game::whackMole(Mole* mole)
 
     updateScore(mole->getMatrix().getTrans(), mole->getScore());
 
-    OSG_INFO << "Whack " << mole->getName() << std::endl;
+    TOY_INFO << "Whack " << mole->getName() << " " << mole << std::endl;
 }
 
 void Game::highlightMole(Mole* mole)
@@ -449,7 +455,13 @@ void Game::highlightMole(Mole* mole)
 
 void Game::removeMole(Mole* mole)
 {
-    OSG_INFO << "Remove mole " << mole->getName() << std::endl;
+    TOY_INFO << "Remove mole " << mole->getName() << " " << mole << std::endl;
+    _removeMoleCallbacks.erase(mole);
+    if (mole->getNumParents() != 1)
+    {
+        OSG_NOTICE << mole->getName() << " has " << mole->getNumParents() << " parents"
+                   << std::endl;
+    }
     assert(mole->getNumParents() == 1);
 
     if (_cursorMole.get() == mole)
@@ -482,6 +494,7 @@ void Game::restart()
 
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
     _sceneRoot->setUpdateCallback(0);
+    _removeMoleCallbacks.clear();
 
     auto camera = getMainCamera();
     camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));

@@ -207,6 +207,8 @@ private:
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Burrow> _burrowList;
+
+    std::map<Mole*, osg::Callback*> _removeMoleCallbacks;
 };
 
 }  // namespace toy
