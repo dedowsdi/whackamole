@@ -1,6 +1,7 @@
 #include <GhostManipulator.h>
 
 #include <Game.h>
+#include <Config.h>
 
 namespace toy
 {
@@ -31,7 +32,7 @@ bool GhostManipulator::handleFrame(
         _eye += side * walkDirection.x() + forward * walkDirection.y();
 
         auto tp = sgg.getTerrainPoint(_eye.x(), _eye.y());
-        _eye.z() = tp.z() + 64;
+        _eye.z() = tp.z() + _cameraHeight;
     }
 
     return FirstPersonManipulator::handleFrame(ea, us);

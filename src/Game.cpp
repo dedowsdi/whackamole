@@ -37,6 +37,7 @@
 
 #include <ALBuffer.h>
 #include <ALSource.h>
+#include <Config.h>
 #include <DB.h>
 #include <GhostManipulator.h>
 #include <Lightning.h>
@@ -48,24 +49,9 @@
 namespace toy
 {
 
-// TODO load this options from cfg file.
-const float sceneRadius = 128;
-const float sceneHeight = 32;
-const int terrainCols = 65;
-const int terrainRows = 65;
-const float lawnHeight = 2.0f;
-const float burrowRadius = 10.0f;
-const float burrowHeight = 6.0f;
-const float moleSize = 10;
-// const int numGrass = 128;
-const float grassSize = 10;
-const float explosionForce = 10;
-const float cursorSize = 20;
-const int numStars = 1024;
-
 osg::Vec3 Burrow::getTopCenter()
 {
-    return osg::Vec3(0, 0, burrowHeight * 0.5f) * node->getMatrix();
+    return osg::Vec3(0, 0, sgc.getFloat("burrow.height") * 0.5f) * node->getMatrix();
 }
 
 class GameEventHandler : public osgGA::GUIEventHandler
@@ -190,7 +176,7 @@ osg::Node* Mole::getModel()
         auto bb = visitor.getBoundingBox();
         auto xyRadius =
             osg::Vec2(bb.xMax() - bb.xMin(), bb.yMax() - bb.yMin()).length() * 0.5;
-        auto scale = moleSize / xyRadius;
+        auto scale = sgc.getFloat("mole.size") / xyRadius;
 
         osg::Matrix m = osg::Matrix::scale(scale, scale, scale);
         m.preMultTranslate(-bb.center());
@@ -485,6 +471,10 @@ void Game::updateScore(const osg::Vec3& pos, int score)
 
 void Game::restart()
 {
+    sgc.reload();
+    _sceneRadius = sgc.getFloat("scene.radius");
+    _sceneHeight = sgc.getFloat("scene.height");
+
     _score = 0;
     _scoreText->setText("0");
 
@@ -516,10 +506,13 @@ void Game::restart()
     auto kcm =
         static_cast<osgGA::KeySwitchMatrixManipulator*>(_viewer->getCameraManipulator());
     kcm->selectMatrixManipulator(1);
-    auto manipulator = kcm->getCurrentMatrixManipulator();
+    auto manipulator = static_cast<GhostManipulator*>(kcm->getCurrentMatrixManipulator());
+    manipulator->setWalkSpeed(sgc.getFloat("camera.walkSpeed"));
+    manipulator->setCameraHeight(sgc.getFloat("camera.height"));
 
-    auto tp = getTerrainPoint(0, -64);
-    tp.z() += 64;
+    auto xy = sgc.getVec2("camera.startXY");
+    auto tp = getTerrainPoint(xy.x(), xy.y());
+    tp.z() += sgc.getFloat("camera.height");
     manipulator->setHomePosition(tp, osg::Vec3(), osg::Z_AXIS);
     _viewer->home();
 }
@@ -568,8 +561,8 @@ osg::Vec3 Game::getTerrainPoint(float x, float y)
 {
     auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
     auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
-    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
-    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
+    auto ndcX = (x + _sceneRadius) * 0.5 / _sceneRadius;
+    auto ndcY = (y + _sceneRadius) * 0.5 / _sceneRadius;
 
     float h;
     if (layer->getInterpolatedValue(ndcX, ndcY, h))
@@ -584,8 +577,8 @@ osg::Vec3 Game::getTerrainNormal(float x, float y)
     auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
     auto heightField = layer->getHeightField();
 
-    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
-    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
+    auto ndcX = (x + _sceneRadius) * 0.5 / _sceneRadius;
+    auto ndcY = (y + _sceneRadius) * 0.5 / _sceneRadius;
     auto i = std::round(heightField->getNumColumns() * ndcX);
     auto j = std::round(heightField->getNumColumns() * ndcY);
     return _heightField->getNormal(i, j);
@@ -599,8 +592,8 @@ void Game::createTerrain()
 {
     _heightField = new osg::HeightField;
 
-    auto rows = terrainRows;
-    auto cols = terrainCols;
+    auto rows = sgc.getInt("terrain.rows");
+    auto cols = sgc.getInt("terrain.cols");
     auto xInterval = 1;
     auto yInterval = 1;
 
@@ -623,14 +616,15 @@ void Game::createTerrain()
         for (int x = 0; x < cols; ++x)
         {
             v[0] += xStep;
-            auto h = pn.PerlinNoise2D(v[0], v[1], 2, 2, 3) * sceneHeight;
+            auto h = pn.PerlinNoise2D(v[0], v[1], 2, 2, 3) * _sceneHeight;
             _heightField->setHeight(x, y, h);
         }
     }
 
     auto locator = new osgTerrain::Locator;
     locator->setCoordinateSystemType(osgTerrain::Locator::GEOGRAPHIC);
-    locator->setTransformAsExtents(-sceneRadius, -sceneRadius, sceneRadius, sceneRadius);
+    locator->setTransformAsExtents(
+        -_sceneRadius, -_sceneRadius, _sceneRadius, _sceneRadius);
 
     auto layer = new osgTerrain::HeightFieldLayer(_heightField);
     layer->setLocator(locator);
@@ -665,6 +659,7 @@ osg::Geometry* createGrass()
     auto texcoords = new osg::Vec2Array();
     // vertices->reserve( * 6 * 4);
 
+    auto grassSize = sgc.getFloat("meadow.grassSize");
     auto hsize = grassSize * 0.5;
     for (auto j = 0; j < 3; ++j)
     {
@@ -707,23 +702,23 @@ void Game::createMeadow()
     auto pos = osg::Vec2();
 
     auto grass = createGrass();
-    auto origin = osg::Vec2(-sceneRadius, -sceneRadius);
+    auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
 
-    auto stepSize = grassSize * 0.6f;
+    auto step = sgc.getFloat("meadow.step") * sgc.getFloat("meadow.grassSize");
 
-    auto cols = sceneRadius * 2 / stepSize;
-    auto rows = sceneRadius * 2 / stepSize;
+    auto cols = _sceneRadius * 2 / step;
+    auto rows = _sceneRadius * 2 / step;
 
     for (auto i = 1; i < cols - 1; ++i)
     {
-        pos.y() = i % 2 ? 0 : 0.5 * stepSize;
-        pos.x() += stepSize;
+        pos.y() = i % 2 ? 0 : 0.5 * step;
+        pos.x() += step;
 
         for (auto j = 1; j < rows - 1; ++j)
         {
-            pos.y() += stepSize;
+            pos.y() += step;
 
-            auto p = osg::Vec2(origin + pos + toy::diskRand(stepSize * 0.25));
+            auto p = osg::Vec2(origin + pos + toy::diskRand(step * 0.25));
             auto tp = getTerrainPoint(p.x(), p.y());
             auto m = osg::Matrix::rotate(unitRand() * osg::PI_2f, osg::Z_AXIS);
             m.postMultTranslate(tp);
@@ -785,17 +780,21 @@ void Game::createOverallMeadow()
     auto normals = new osg::Vec3Array(osg::Array::BIND_OVERALL);
     normals->push_back(osg::Z_AXIS);
 
-    auto points = poissonDiskSample(
-        osg::Vec2(-sceneRadius, -sceneRadius), osg::Vec2(sceneRadius, sceneRadius), 16, 32);
+    auto points = poissonDiskSample(osg::Vec2(-_sceneRadius, -_sceneRadius),
+        osg::Vec2(_sceneRadius, _sceneRadius), 16, 32);
 
     vertices->reserve(points.size() * 6 * 4);
     texcoords->reserve(vertices->capacity());
 
+    auto grassSize = sgc.getFloat("meadow.grassSize");
+    auto offsetValue = sgc.getFloat("meadow.grassMaxOffset");
+    auto maxOffset = osg::Vec2(offsetValue, offsetValue);
     auto hsize = grassSize * 0.5;
 
     for (auto& p: points)
     {
-        auto pos = getTerrainPoint(p.x(), p.y());
+        auto xy = p + linearRand(-maxOffset, maxOffset) * grassSize;
+        auto pos = getTerrainPoint(xy.x(), xy.y());
         auto startAngle = unitRand() * osg::PI_2f;
 
         // create * billboards
@@ -847,9 +846,10 @@ void Game::createOverallMeadow()
 
 void Game::createBurrows()
 {
-    auto maxCenter = sceneRadius - burrowRadius;
-    auto points = poissonDiskSample(osg::Vec2(-sceneRadius, -sceneRadius) * 0.5,
-        osg::Vec2(sceneRadius, sceneRadius) * 0.5, 40, 32);
+    auto maxCenter = _sceneRadius - sgc.getFloat("burrow.radius");
+    auto spawnRadius = sgc.getFloat("burrow.spawnRadius") * _sceneRadius;
+    auto points = poissonDiskSample(
+        osg::Vec2(-spawnRadius, -spawnRadius), osg::Vec2(spawnRadius, spawnRadius), 40, 32);
 
     for (auto& p: points)
     {
@@ -866,8 +866,8 @@ Burrow Game::createBurrow(const osg::Vec3& pos, const osg::Vec3& normal)
     static osg::ref_ptr<osg::ShapeDrawable> graph;
     if (!graph)
     {
-        graph = new osg::ShapeDrawable(
-            new osg::Cylinder(osg::Vec3(), burrowRadius, burrowHeight));
+        graph = new osg::ShapeDrawable(new osg::Cylinder(
+            osg::Vec3(), sgc.getFloat("burrow.radius"), sgc.getFloat("burrow.height")));
         graph->setName("Burrow");
         graph->setColor(osg::Vec4(0.2f, 0.2f, 0.2f, 0.2f));
 
@@ -982,6 +982,8 @@ osg::Node* Game::createUI()
         texcoords->push_back(tc0);
 
         // Tesselator doesn't support Vec2Array
+        auto cursorSize = sgc.getFloat("ui.cursorSize");
+
         auto vertices = new osg::Vec3Array();
         vertices->push_back(osg::Vec3((tc0 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
         vertices->push_back(osg::Vec3((tc1 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
@@ -1053,9 +1055,9 @@ void Game::createStarfield()
     root->addChild(projNode);
 
     // add moon
-    auto radius = 1000;
+    auto radius = sgc.getFloat("starfield.radius");
     {
-        auto pos = osg::Vec3(-10, 100, 0.01);
+        auto pos = sgc.getVec3("starfield.moon.pos");
         pos.normalize();
         pos *= radius;
 
@@ -1085,6 +1087,7 @@ void Game::createStarfield()
     {
         auto stars = new osg::Geometry;
         auto vertices = new osg::Vec4Array(osg::Array::BIND_PER_VERTEX);
+        auto numStars = sgc.getInt("scene.numStars");
         vertices->reserve(numStars);
         for (auto i = 0; i < numStars; ++i)
         {
@@ -1164,7 +1167,7 @@ void Game::explode(const osg::Vec3& pos)
         OSG_NOTICE << "Running out of explosions" << std::endl;
     }
 
-    *iter = osg::Vec4(pos, explosionForce);
+    *iter = osg::Vec4(pos, sgc.getFloat("lightning.explosionForce"));
     auto index = std::distance(_explosions.begin(), iter);
     auto explosionUpdater = osgf::createCallback(
         [=](auto obj, auto data) { _explosions[index].w() -= sgg.getDeltaTime() * 5; });

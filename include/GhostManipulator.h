@@ -14,8 +14,10 @@ public:
     float getWalkSpeed() const { return _walkSpeed; }
     void setWalkSpeed(float v) { _walkSpeed = v; }
 
-protected:
+    float getCameraHeight() const { return _cameraHeight; }
+    void setCameraHeight(float v) { _cameraHeight = v; }
 
+protected:
     bool handleFrame(
         const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& us) override;
 
@@ -42,7 +44,8 @@ protected:
     osg::Vec3 combineWalkDirection();
 
     int _walkDirection = 0;
-    float _walkSpeed = 8.0f;
+    float _walkSpeed = 1.0f;
+    float _cameraHeight = 1.0f;
 };
 
 }  // namespace toy

@@ -55,6 +55,7 @@ set(SRC
     src/ALListener.cpp
     src/ALSource.cpp
     src/BaseGame.cpp
+    src/Config.cpp
     src/DB.cpp
     src/DebugHandler.cpp
     src/Game.cpp

@@ -182,6 +182,10 @@ private:
     double _deltaTime = 0;
     float _timer = 30;
     float _totalTime = 30;
+
+    float _sceneRadius;
+    float _sceneHeight;
+
     osg::ref_ptr<osgText::Text> _timerText;
     osg::ref_ptr<osg::Node> _timerBar;
 
