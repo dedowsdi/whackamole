@@ -331,6 +331,7 @@ void Game::popMole()
     burrow.active = true;
 
     auto mole = new Mole(&burrow);
+    showReal(mole);
     mole->setName("Mole" + std::to_string(moleIndex++));
 
     osg::ComputeBoundsVisitor visitor;
@@ -375,10 +376,9 @@ void Game::whackMole(Mole* mole)
 {
     assert(mole->getNumParents() == 1);
 
+    show(mole);
     mole->setKicked(true);
     mole->getBurrow()->active = false;
-    mole->setNodeMask(nb_visible);
-    mole->setHighlighted(false);
 
     if (_cursorMole.get() == mole)
     {
@@ -479,7 +479,7 @@ void Game::restart()
     createBurrows();
     _explosions.assign(16, osg::Vec4());
 
-    _msg->setNodeMask(0);
+    hide(_msg);
     _timer = 60;
     _totalTime = 60;
     _timerText->setText(std::to_string(_timer));
@@ -529,7 +529,12 @@ void Game::hide(osg::Node* node)
 
 void Game::show(osg::Node* node)
 {
-    node->setNodeMask(1);
+    node->setNodeMask(nb_visible);
+}
+
+void Game::showReal(osg::Node* node)
+{
+    node->setNodeMask(nb_visible | nb_raytest);
 }
 
 Game::Game() {}
@@ -642,7 +647,7 @@ osg::Geometry* createGrass()
 void Game::createMeadow()
 {
     auto root = new osg::Group;
-    root->setNodeMask(nb_visible);
+    show(root);
 
     auto pos = osg::Vec2();
 
@@ -844,6 +849,7 @@ Burrow Game::createBurrow(const osg::Vec3& pos, const osg::Vec3& normal)
     }
 
     auto frame = new osg::MatrixTransform;
+    showReal(frame);
     osg::Matrix m = osg::Matrix::rotate(osg::Z_AXIS, normal);
     m.postMultTranslate(pos);
     frame->setMatrix(m);
@@ -1006,7 +1012,7 @@ osg::Node* Game::createUI()
 void Game::createStarfield()
 {
     auto root = new osg::Group;
-    root->setNodeMask(nb_visible);
+    show(root);
     root->setName("Starfield");
 
     auto rootSS = root->getOrCreateStateSet();
@@ -1084,7 +1090,7 @@ void Game::createStarfield()
 void Game::playWhackAnimation(const osg::Vec3& pos)
 {
     auto l = new Lightning;
-    l->setNodeMask(nb_visible);
+    show(l);
     l->setBillboardWidth(8);
     l->setMaxJitter(0.37);
     l->add("jjjjjj", pos + osg::Vec3(diskRand(5), 168), pos);

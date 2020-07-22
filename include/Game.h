@@ -136,6 +136,9 @@ public:
 
     void show(osg::Node* node);
 
+    // visible | raytest
+    void showReal(osg::Node* node);
+
 private:
     Game();
 
