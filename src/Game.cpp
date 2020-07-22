@@ -259,7 +259,7 @@ bool Game::run(osg::Object* object, osg::Object* data)
     _deltaTime = _lastTime == 0 ? 0 : t0 - _lastTime;
     _lastTime = t0;
 
-    if (_status == gs_running)
+    if (_status == gs_running && _deltaTime > 0)
     {
         auto newMole = toy::unitRand() < _popRate;
         if (newMole)
@@ -938,12 +938,12 @@ osg::Node* Game::createUI()
     auto wsize = getWindowSize();
     auto barSize = osg::Vec2(wsize.x() * 0.95, wsize.y() * 0.04);
     auto y = 16;
+    auto x = (wsize.x() - barSize.x()) * 0.5f;
 
     // create timer text, bar
     {
-        // auto barSize = osg::Vec2(bbTimer.xMin() - 4 - bbScore.xMax(), 50);
-        _timerBar = osg::createTexturedQuadGeometry(osg::Vec3(wsize.x() * 0.025, y, 0),
-            osg::Vec3(barSize.x(), 0, 0), osg::Vec3(0, barSize.y(), 0));
+        _timerBar = osg::createTexturedQuadGeometry(
+            osg::Vec3(x, y, 0), osg::Vec3(barSize.x(), 0, 0), osg::Vec3(0, barSize.y(), 0));
         y += barSize.y() + 2;
 
         auto ss = _timerBar->getOrCreateStateSet();
@@ -958,8 +958,8 @@ osg::Node* Game::createUI()
     }
 
     _score = 0;
-    _scoreText = createText("Score", "0", 18, osg::Vec3(10, y, 0));
-    _timerText = createText("Timer", "30", 18, osg::Vec3(wsize.x() * 0.975f, y, 0));
+    _scoreText = createText("Score", "0", 18, osg::Vec3(x, y, 0));
+    _timerText = createText("Timer", "30", 18, osg::Vec3(wsize.x() - x, y, 0));
     _timerText->setAlignment(osgText::Text::RIGHT_BOTTOM);
 
     _msg = createText(
