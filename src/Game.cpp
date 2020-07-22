@@ -451,6 +451,7 @@ void Game::highlightMole(Mole* mole)
     {
         mole->setHighlighted(true);
     }
+    _cursorMole = mole;
 }
 
 void Game::removeMole(Mole* mole)
