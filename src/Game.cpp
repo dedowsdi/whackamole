@@ -256,7 +256,6 @@ osg::Node* Mole::getBurnedModel()
 
         _burnedModel = burned;
     }
-    return getModel();
 
     return _burnedModel;
 }
@@ -586,7 +585,7 @@ void Game::createTerrain()
     tile->setColorLayer(0, clayer);
 
     _terrain = new osgTerrain::Terrain;
-    _terrain->addChild(tile);
+    tile->setTerrain(_terrain);
 
     auto ss = _terrain->getOrCreateStateSet();
 
@@ -667,7 +666,7 @@ void Game::createMeadow()
             auto p = osg::Vec2(origin + pos + toy::diskRand(stepSize * 0.25));
             auto tp = getTerrainPoint(p.x(), p.y());
             auto m = osg::Matrix::rotate(unitRand() * osg::PI_2f, osg::Z_AXIS);
-            m.postMultTranslate(tp.first);
+            m.postMultTranslate(tp);
 
             auto frame = new osg::MatrixTransform;
             frame->setMatrix(m);
@@ -736,10 +735,7 @@ void Game::createOverallMeadow()
 
     for (auto& p: points)
     {
-        auto tp = getTerrainPoint(p.x(), p.y());
-        auto& pos = tp.first;
-        auto& normal = tp.second;
-
+        auto pos = getTerrainPoint(p.x(), p.y());
         auto startAngle = unitRand() * osg::PI_2f;
 
         // create * billboards
@@ -789,17 +785,32 @@ void Game::createOverallMeadow()
     _sceneRoot->addChild(geometry);
 }
 
-std::pair<osg::Vec3, osg::Vec3> Game::getTerrainPoint(float x, float y)
+osg::Vec3 Game::getTerrainPoint(float x, float y)
 {
-    auto minX = -sceneRadius;
-    auto minY = -sceneRadius;
-    auto xInterval = sceneRadius * 2.0 / (terrainCols - 1);
-    auto yInterval = sceneRadius * 2.0 / (terrainRows - 1);
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
+    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
+    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
+    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
 
-    auto col = (x - minX) / xInterval;
-    auto row = (y - minY) / yInterval;
-    return std::make_pair(osg::Vec3(x, y, _heightField->getHeight(col, row)),
-        _heightField->getNormal(col, row));
+    float h;
+    if(layer->getInterpolatedValue(ndcX, ndcY, h))
+        return osg::Vec3(x, y, h);
+    else
+        return osg::Vec3();
+
+}
+
+osg::Vec3 Game::getTerrainNormal(float x, float y)
+{
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
+    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
+    auto heightField = layer->getHeightField();
+
+    auto ndcX = (x + sceneRadius) * 0.5 / sceneRadius;
+    auto ndcY = (y + sceneRadius) * 0.5 / sceneRadius;
+    auto i = std::round(heightField->getNumColumns() * ndcX);
+    auto j = std::round(heightField->getNumColumns() * ndcY);
+    return _heightField->getNormal(i, j);
 }
 
 void Game::createBurrows()
@@ -810,8 +821,9 @@ void Game::createBurrows()
 
     for (auto& p: points)
     {
-        auto tp = getTerrainPoint(p.x(), p.y());
-        auto burrow = createBurrow(tp.first, tp.second);
+        auto point = getTerrainPoint(p.x(), p.y());
+        auto normal = getTerrainNormal(p.x(), p.y());
+        auto burrow = createBurrow(point, normal);
         _sceneRoot->addChild(burrow.node);
         _burrowList.push_back(burrow);
     }

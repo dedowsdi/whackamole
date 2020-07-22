@@ -147,7 +147,11 @@ private:
 
     void createOverallMeadow();
 
-    std::pair<osg::Vec3, osg::Vec3> getTerrainPoint(float x, float y);
+    // interpolated point
+    osg::Vec3 getTerrainPoint(float x, float y);
+
+    // 4 point normal of the closest control point
+    osg::Vec3 getTerrainNormal(float x, float y);
 
     void createBurrows();
 
