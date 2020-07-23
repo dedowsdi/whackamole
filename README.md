@@ -5,7 +5,7 @@ A small program written in [OpenSceneGraph](https://github.com/openscenegraph/Op
 ![screenshot](https://i.imgur.com/Dc4WXnb.jpg)
 
 ## Video
-[whackamole](https://www.youtube.com/watch?v=FMo2REMaqx4)
+[whackamole](https://www.youtube.com/watch?v=p9jhkjbPPT0)
 
 ## Compile
 Require a compiler that support c++14. Only tested in Ubuntu18.04 and windows10.

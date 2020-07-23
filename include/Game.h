@@ -122,6 +122,8 @@ public:
 
     void timeout();
 
+    void resize(int width, int height);
+
     void moveCursor(float x, float y);
 
     void flashCursor(bool v);
@@ -188,7 +190,7 @@ private:
     float _popRate = 0.002;
 
     osg::ref_ptr<osgText::Text> _timerText;
-    osg::ref_ptr<osg::Node> _timerBar;
+    osg::ref_ptr<osg::Geometry> _timerBar;
 
     int _score = 0;
     osg::ref_ptr<osgText::Text> _scoreText;

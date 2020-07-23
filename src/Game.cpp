@@ -109,6 +109,10 @@ public:
             case osgGA::GUIEventAdapter::MOVE:
                 break;
 
+            case osgGA::GUIEventAdapter::RESIZE:
+                sgg.resize(ea.getWindowWidth(), ea.getWindowHeight());
+                break;
+
             default:
                 break;
         }
@@ -540,6 +544,47 @@ void Game::timeout()
     _status = gs_timeout;
 }
 
+void Game::resize(int width, int height)
+{
+    // reset hudcamera projection
+    osg::Matrix m;
+    m.makeOrtho(0, width, 0, height, -1, 1);
+    _hudCamera->setProjectionMatrix(m);
+
+    // resize ui
+    auto barSize = sgc.getVec2("ui.bar.size");
+    barSize = osg::componentMultiply(barSize, osg::Vec2(width, height));
+    auto y = sgc.getFloat("ui.bar.y");
+    auto x = (width - barSize.x()) * 0.5f;
+
+    // resize time bar
+    auto vertices = static_cast<osg::Vec3Array*>(_timerBar->getVertexArray());
+    auto corner = osg::Vec3(x, y, 0);
+    auto widthVec = osg::Vec3(barSize.x(), 0, 0);
+    auto heightVec = osg::Vec3(0, barSize.y(), 0);
+    (*vertices)[0] = corner+heightVec;
+    (*vertices)[1] = corner;
+    (*vertices)[2] = corner+widthVec;
+    (*vertices)[3] = corner+widthVec+heightVec;
+    vertices->dirty();
+    _timerBar->dirtyGLObjects();
+    _timerBar->dirtyBound();
+
+    auto ss = _timerBar->getOrCreateStateSet();
+    ss->addUniform(new osg::Uniform("size", barSize));
+
+    y += barSize.y() + 2;
+
+    // place text
+    _timerText->setPosition(osg::Vec3(x + barSize.x(), y, 0));
+    _timerText->setAlignment(osgText::Text::RIGHT_BOTTOM);
+
+    _scoreText->setPosition(osg::Vec3(x, y, 0));
+
+    _msg->setPosition(osg::Vec3(x, height - 16, 0));
+    _msg->setAlignment(osgText::Text::LEFT_TOP);
+}
+
 void Game::moveCursor(float x, float y)
 {
     _cursorFrame->setMatrix(osg::Matrix::translate(osg::Vec3(x, y, 0)));
@@ -935,36 +980,29 @@ private:
 
 osg::Node* Game::createUI()
 {
-    auto wsize = getWindowSize();
-    auto barSize = osg::Vec2(wsize.x() * 0.95, wsize.y() * 0.04);
-    auto y = 16;
-    auto x = (wsize.x() - barSize.x()) * 0.5f;
+    // Most thing will be resized in the end of this method
 
     // create timer text, bar
     {
         _timerBar = osg::createTexturedQuadGeometry(
-            osg::Vec3(x, y, 0), osg::Vec3(barSize.x(), 0, 0), osg::Vec3(0, barSize.y(), 0));
-        y += barSize.y() + 2;
+            osg::Vec3(), osg::Vec3(1, 0, 0), osg::Vec3(0, 1, 0));
 
         auto ss = _timerBar->getOrCreateStateSet();
 
         auto prg = createProgram("shader/timer_bar.frag", osg::Shader::FRAGMENT);
         ss->setAttributeAndModes(prg);
 
-        ss->addUniform(new osg::Uniform("size", barSize));
+        ss->addUniform(new osg::Uniform("size", osg::Vec2(1, 1)));
         auto percentUniform = new osg::Uniform("percent", 1.0f);
         ss->addUniform(percentUniform);
         ss->setUpdateCallback(new TimerBarUpdater(percentUniform));
     }
 
     _score = 0;
-    _scoreText = createText("Score", "0", 18, osg::Vec3(x, y, 0));
-    _timerText = createText("Timer", "30", 18, osg::Vec3(wsize.x() - x, y, 0));
-    _timerText->setAlignment(osgText::Text::RIGHT_BOTTOM);
-
+    _scoreText = createText("Score", "0", 18, osg::Vec3());
+    _timerText = createText("Timer", "30", 18, osg::Vec3());
     _msg = createText(
-        "Msg", "Press r to start new game.", 18, osg::Vec3(20, wsize.y() - 20, 0));
-    _msg->setAlignment(osgText::Text::LEFT_TOP);
+        "Msg", "Press r to start new game.", 18, osg::Vec3());
 
     auto root = new osg::Group;
     root->addChild(_scoreText);
@@ -976,7 +1014,6 @@ osg::Node* Game::createUI()
     hide(_scoreText);
     hide(_timerText);
     hide(_timerBar);
-
     hide(_timerText);
 
     // create cursor
@@ -1002,7 +1039,7 @@ osg::Node* Game::createUI()
         texcoords->push_back(tc0);
 
         // Tesselator doesn't support Vec2Array
-        auto cursorSize = sgc.getFloat("ui.cursorSize");
+        auto cursorSize = sgc.getFloat("ui.cursor.size");
 
         auto vertices = new osg::Vec3Array();
         vertices->push_back(osg::Vec3((tc0 - osg::Vec2(0.5, 0.5)) * cursorSize, 0));
@@ -1054,6 +1091,9 @@ osg::Node* Game::createUI()
             _cursorFrame->addChild(outline);
         }
     }
+
+    auto wsize = osgq::getWindowRect(*_viewer);
+    resize(wsize.z(), wsize.w());
 
     return root;
 }
