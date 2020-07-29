@@ -519,6 +519,7 @@ void Game::restart()
 
     createStarfield();
     createTerrain();
+    createPool();
     createMeadow();
 
     _burrowList.clear();
@@ -667,7 +668,7 @@ void Game::createTerrain()
     _heightField = new osg::HeightField;
 
     // make sure no scale happens between heightfiled and heightfield layer, otherwise
-    // HeightField::getNormal will broke
+    // HeightField::getNormal will break
     auto rows = sgc.getInt("terrain.rows");
     auto cols = sgc.getInt("terrain.cols");
     auto xInterval = _sceneRadius * 2 / cols;
@@ -676,25 +677,41 @@ void Game::createTerrain()
     _heightField->allocate(rows, cols);
     _heightField->setXInterval(xInterval);
     _heightField->setYInterval(yInterval);
-    _heightField->setOrigin(osg::Vec3());
+    _heightField->setOrigin(osg::Vec3(-_sceneRadius, -_sceneRadius, 0));
 
     osgUtil::PerlinNoise pn;
     pn.SetNoiseFrequency(64);
 
     auto yStep = 0.03;
     auto xStep = 0.03;
-    double v[2] = {linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f)};
+    auto noiseFactor = osg::Vec2(linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f));
+
+    auto poolRadius = sgc.getFloat("pool.radius");
+    auto poolBottomRadius = sgc.getFloat("pool.bottomRadius");
+    auto poolDepth = sgc.getFloat("pool.depth");
 
     for (int y = 0; y < rows; ++y)
     {
-        v[1] += yStep;
-        v[0] = 0;
-        for (int x = 0; x < cols; ++x)
-        {
-            v[0] += xStep;
-            auto h = pn.PerlinNoise2D(v[0], v[1], 2, 2, 3) * _sceneHeight;
-            _heightField->setHeight(x, y, h);
-        }
+        noiseFactor[1] += yStep;
+        noiseFactor[0] = 0;
+
+            for (int x = 0; x < cols; ++x)
+            {
+                noiseFactor[0] += xStep;
+                auto h = pn.PerlinNoise2D(noiseFactor[0], noiseFactor[1], 2, 2, 3) *
+                         _sceneHeight;
+
+                // dig pool
+                auto vertex = _heightField->getVertex(x, y);
+                auto l = osg::Vec2(vertex.x(), vertex.y()).length();
+                if (l < poolRadius)
+                {
+                    h -= mix(0.0f, poolDepth,
+                        1.0f - smoothstep(poolBottomRadius, poolRadius, l));
+                }
+
+                _heightField->setHeight(x, y, h);
+            }
     }
 
     auto locator = new osgTerrain::Locator;
@@ -724,6 +741,18 @@ void Game::createTerrain()
     ss->setAttributeAndModes(material);
 
     _sceneRoot->addChild(_terrain);
+}
+
+void Game::createPool()
+{
+    auto radius = sgc.getFloat("pool.radius");
+    auto top = sgc.getFloat("pool.top");
+
+    _pool = osg::createTexturedQuadGeometry(osg::Vec3(-radius, -radius, top),
+        osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
+    show(_pool);
+
+    _sceneRoot->addChild(_pool);
 }
 
 osg::Geometry* createGrass()
@@ -800,6 +829,10 @@ void Game::createMeadow()
     // create grasses
     int cols = _sceneRadius * 2 / step;
     int rows = _sceneRadius * 2 / step;
+
+    auto poolRadius = sgc.getFloat("pool.radius");
+
+    auto count = 0;
     for (auto i = 1; i < cols - 1; ++i)
     {
         pos.y() = i % 2 ? 0 : 0.5 * step;
@@ -810,6 +843,13 @@ void Game::createMeadow()
             pos.y() += step;
 
             auto p = osg::Vec2(origin + pos + toy::diskRand(step * 0.25));
+
+            if (p.length() < poolRadius)
+            {
+                continue;
+            }
+
+            ++count;
             auto tp = getTerrainPoint(p.x(), p.y());
             auto m = osg::Matrix::rotate(unitRand() * osg::PI_2f, osg::Z_AXIS);
             m.postMultTranslate(tp);
@@ -827,8 +867,10 @@ void Game::createMeadow()
             parentGroup->addChild(frame);
             // OSG_DEBUG << "add grass " << i << ":" << j << " to group " << groupName
             //            << std::endl;
+
         }
     }
+    OSG_NOTICE << "Create " << count << " grasses" << std::endl;
 
     static osg::StateSet* ss = 0;
     if (!ss)
@@ -946,14 +988,20 @@ void Game::createOverallMeadow()
 
 void Game::createBurrows()
 {
-    auto maxCenter = _sceneRadius - sgc.getFloat("burrow.radius");
+    auto burrowRadius = sgc.getFloat("burrow.radius");
     auto spawnRadius = sgc.getFloat("burrow.spawnRadius") * _sceneRadius;
     auto spawnDistance = sgc.getFloat("burrow.spawnDistance");
     auto points = poissonDiskSample(osg::Vec2(-spawnRadius, -spawnRadius),
         osg::Vec2(spawnRadius, spawnRadius), spawnDistance, 32);
 
+    auto poolRadius = sgc.getFloat("pool.radius");
     for (auto& p: points)
     {
+        if (p.length() - burrowRadius  < poolRadius)
+        {
+            continue;
+        }
+
         auto point = getTerrainPoint(p.x(), p.y());
         auto normal = getTerrainNormal(p.x(), p.y());
         normal.normalize();

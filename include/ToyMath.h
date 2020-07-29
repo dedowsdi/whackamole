@@ -429,6 +429,13 @@ inline T createMatrixMinor(
 std::vector<osg::Vec2> poissonDiskSample(
     const osg::Vec2& minExt, const osg::Vec2& maxExt, float radius, int k);
 
+inline float smoothstep(float edge0, float edge1, float x)
+{
+    float t;
+    t = clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+    return t * t * (3.0 - 2.0 * t);
+}
+
 }  // namespace toy
 
 #endif  // BOUNCINGBALL_MATH_H

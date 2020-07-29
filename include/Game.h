@@ -158,6 +158,8 @@ private:
 
     void createTerrain();
 
+    void createPool();
+
     void createMeadow();
 
     void createOverallMeadow();
@@ -206,6 +208,8 @@ private:
     osg::ref_ptr<osgText::Text> _msg;
     osg::ref_ptr<osg::HeightField> _heightField;
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
+
+    osg::ref_ptr<osg::Geometry> _pool;
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Burrow> _burrowList;
