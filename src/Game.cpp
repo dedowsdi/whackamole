@@ -34,6 +34,8 @@
 #include <osgUtil/PerlinNoise>
 #include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
+#include <osg/LightModel>
+#include <osg/LightSource>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
@@ -490,16 +492,27 @@ void Game::updateScore(const osg::Vec3& pos, int score)
 void Game::restart()
 {
     sgc.reload();
+
+    _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
+    _sceneRoot->setUpdateCallback(0);
+    _removeMoleCallbacks.clear();
+
+    auto lm = new osg::LightModel;
+    lm->setLocalViewer(true);
+    lm->setAmbientIntensity(sgc.getVec4("scene.ambient"));
+    _root->getOrCreateStateSet()->setAttributeAndModes(lm);
+
+    auto light = _viewer->getLight();
+    light->setDiffuse(sgc.getVec4("scene.headlight.diffuse"));
+    light->setSpecular(sgc.getVec4("scene.headlight.specular"));
+    light->setAmbient(sgc.getVec4("scene.headlight.ambient"));
+
     _sceneRadius = sgc.getFloat("scene.radius");
     _sceneHeight = sgc.getFloat("scene.height");
     _popRate = sgc.getFloat("mole.popRate");
 
     _score = 0;
     _scoreText->setText("0");
-
-    _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
-    _sceneRoot->setUpdateCallback(0);
-    _removeMoleCallbacks.clear();
 
     auto camera = getMainCamera();
     camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
@@ -1145,7 +1158,6 @@ void Game::createStarfield()
     moonPos.normalize();
     moonPos *= radius;
     {
-
         auto moon = osgf::createPoints({moonPos});
         moon->setName("Moon");
         moon->setCullingActive(false);
@@ -1166,6 +1178,17 @@ void Game::createStarfield()
         rootSS->setAttributeAndModes(program);
 
         projNode->addChild(moon);
+
+        // add moon as global sky light
+        auto ls = new osg::LightSource;
+        auto light = ls->getLight();
+        light->setLightNum(1);
+        light->setPosition(osg::Vec4(moonPos, 0));
+        light->setAmbient(sgc.getVec4("starfield.moon.ambient"));
+        light->setSpecular(sgc.getVec4("starfield.moon.specular"));
+
+        _sceneRoot->addChild(ls);
+        ls->setStateSetModes(*_sceneRoot->getOrCreateStateSet(), osg::StateAttribute::ON);
     }
 
     // add stars
