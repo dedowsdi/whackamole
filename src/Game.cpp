@@ -722,7 +722,7 @@ osg::Geometry* createGrass()
     auto texcoords = new osg::Vec2Array();
     // vertices->reserve( * 6 * 4);
 
-    auto grassSize = sgc.getFloat("meadow.grassSize");
+    auto grassSize = sgc.getFloat("meadow.grass.size");
     auto hsize = grassSize * 0.5;
     for (auto j = 0; j < 3; ++j)
     {
@@ -767,11 +767,26 @@ void Game::createMeadow()
     auto grass = createGrass();
     auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
 
-    auto step = sgc.getFloat("meadow.step") * sgc.getFloat("meadow.grassSize");
+    auto step = sgc.getFloat("meadow.grass.step") * sgc.getFloat("meadow.grass.size");
 
-    auto cols = _sceneRadius * 2 / step;
-    auto rows = _sceneRadius * 2 / step;
+    auto numGroups = sgc.getInt("meadow.numGroupsPerRow");
 
+    // create grass groups to speed up cull traversal
+    std::map<std::string, osg::Group*> grassGroups;
+    for (auto i = 0; i < numGroups; i++)
+    {
+        for (auto j = 0; j < numGroups; j++)
+        {
+            auto group = new osg::Group;
+            group->setName("GrassGroup" + std::to_string(i) + ":" + std::to_string(j));
+            root->addChild(group);
+            grassGroups[group->getName()] = group;
+        }
+    }
+
+    // create grasses
+    int cols = _sceneRadius * 2 / step;
+    int rows = _sceneRadius * 2 / step;
     for (auto i = 1; i < cols - 1; ++i)
     {
         pos.y() = i % 2 ? 0 : 0.5 * step;
@@ -789,7 +804,16 @@ void Game::createMeadow()
             auto frame = new osg::MatrixTransform;
             frame->setMatrix(m);
             frame->addChild(grass);
-            root->addChild(frame);
+
+            auto groupCol = numGroups * i / cols ;
+            auto groupRow = numGroups * j / rows ;
+            auto groupName =
+                "GrassGroup" + std::to_string(groupCol) + ":" + std::to_string(groupRow);
+            auto parentGroup = grassGroups[groupName];
+
+            parentGroup->addChild(frame);
+            // OSG_DEBUG << "add grass " << i << ":" << j << " to group " << groupName
+            //            << std::endl;
         }
     }
 
@@ -849,8 +873,8 @@ void Game::createOverallMeadow()
     vertices->reserve(points.size() * 6 * 4);
     texcoords->reserve(vertices->capacity());
 
-    auto grassSize = sgc.getFloat("meadow.grassSize");
-    auto offsetValue = sgc.getFloat("meadow.grassMaxOffset");
+    auto grassSize = sgc.getFloat("meadow.grass.size");
+    auto offsetValue = sgc.getFloat("meadow.grass.maxOffset");
     auto maxOffset = osg::Vec2(offsetValue, offsetValue);
     auto hsize = grassSize * 0.5;
 
