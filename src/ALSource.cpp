@@ -5,7 +5,7 @@
 #include <osg/Group>
 #include <osg/NodeVisitor>
 
-#include <AL.h>
+#include <ToyAL.h>
 #include <ALBuffer.h>
 #include <ALSource.h>
 #include <SoundObjectManager.h>

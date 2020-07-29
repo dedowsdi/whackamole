@@ -1,7 +1,7 @@
 #include <ALBuffer.h>
 
 #include <osgDB/FileUtils>
-#include <AL.h>
+#include <ToyAL.h>
 #include <SoundObjectManager.h>
 
 namespace toy

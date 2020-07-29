@@ -5,7 +5,7 @@
 #include <map>
 #include <typeindex>
 
-#include <AL/al.h>
+#include <AL.h>
 #include <osg/ref_ptr>
 #include <osg/Referenced>
 

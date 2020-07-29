@@ -44,12 +44,7 @@ if(WIN32)
     link_directories(${FREEALUT_LIBRARY_DIRS})
 endif()
 
-include_directories(
-    ${OPENSCENEGRAPH_INCLUDE_DIRS}
-    )
-
 set(SRC
-    src/AL.cpp
     src/ALBuffer.cpp
     src/ALContext.cpp
     src/ALListener.cpp
@@ -67,6 +62,7 @@ set(SRC
     src/ReaderWriterAL.cpp
     src/Resource.cpp
     src/SoundObjectManager.cpp
+    src/ToyAL.cpp
     src/ToyCopyOp.cpp
     src/ToyMath.cpp
     src/ToyViewer.cpp

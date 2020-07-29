@@ -2,7 +2,7 @@
 
 #include <osg/NodeVisitor>
 
-#include <AL.h>
+#include <ToyAL.h>
 
 namespace toy
 {
