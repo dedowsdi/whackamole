@@ -71,8 +71,15 @@ private:
 
 enum node_bit
 {
+    nb_invisible = 0,
     nb_visible = 1 << 0,
-    nb_raytest = 1 << 1
+    nb_above_waterline = 1 << 1,
+    nb_below_waterline = 1 << 2,
+    nb_raytest = 1 << 3,
+    nb_ui = nb_visible,
+    nb_terrain = nb_above_waterline | nb_below_waterline | nb_raytest,
+    nb_real_object = nb_above_waterline | nb_raytest,
+    nb_unreal_object = nb_above_waterline,
 };
 
 #define sgg ::toy::Game::instance()
@@ -140,11 +147,6 @@ public:
 
     void hide(osg::Node* node);
 
-    void show(osg::Node* node);
-
-    // visible | raytest
-    void showReal(osg::Node* node);
-
     // interpolated point
     osg::Vec3 getTerrainPoint(float x, float y);
 
@@ -210,6 +212,13 @@ private:
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
 
     osg::ref_ptr<osg::Geometry> _pool;
+    osg::ref_ptr<osg::Texture2D> _reflectMap;
+    osg::ref_ptr<osg::Texture2D> _refractMap;
+    osg::ref_ptr<osg::Texture2D> _depthMap;
+    osg::ref_ptr<osg::Texture2D> _dudvMap;
+    osg::ref_ptr<osg::Texture2D> _normalMap;
+    osg::ref_ptr<osg::Camera> _reflectRttCamera;
+    osg::ref_ptr<osg::Camera> _refractRttCamera;
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Burrow> _burrowList;

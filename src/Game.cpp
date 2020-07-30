@@ -36,6 +36,8 @@
 #include <osgViewer/Viewer>
 #include <osg/LightModel>
 #include <osg/LightSource>
+#include <osg/ClipNode>
+#include <osg/ClipPlane>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
@@ -200,8 +202,8 @@ osg::Node* Mole::getModel()
         //     new osg::CullFace, osg::StateAttribute::OFF |
         //     osg::StateAttribute::PROTECTED);
 
-        ss->setMode(
-            GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        // ss->setMode(
+        //     GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
 
         _model = frame;
     }
@@ -309,10 +311,14 @@ void Game::preInit()
 void Game::postInit()
 {
     _viewer->home();
+
+    auto wsize = osgq::getWindowRect(*_viewer);
+    resize(wsize.z(), wsize.w());
 }
 
 void Game::createScene()
 {
+    // don't add reload and resize related code here
     _hudCamera->addChild(createUI());
 
     _root->addUpdateCallback(this);
@@ -348,7 +354,7 @@ void Game::popMole()
     burrow.active = true;
 
     auto mole = new Mole(&burrow);
-    showReal(mole);
+    mole->setNodeMask(nb_real_object);
     mole->setName("Mole" + std::to_string(moleIndex++));
 
     osg::ComputeBoundsVisitor visitor;
@@ -394,7 +400,7 @@ void Game::whackMole(Mole* mole)
 {
     assert(mole->getNumParents() == 1);
 
-    show(mole);
+    mole->setNodeMask(nb_unreal_object);
     mole->setKicked(true);
     mole->getBurrow()->active = false;
 
@@ -496,11 +502,15 @@ void Game::restart()
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
     _sceneRoot->setUpdateCallback(0);
     _removeMoleCallbacks.clear();
+    _root->removeChild(_reflectRttCamera);
+    _root->removeChild(_refractRttCamera);
 
     auto lm = new osg::LightModel;
     lm->setLocalViewer(true);
     lm->setAmbientIntensity(sgc.getVec4("scene.ambient"));
-    _root->getOrCreateStateSet()->setAttributeAndModes(lm);
+    _sceneRoot->getOrCreateStateSet()->setAttributeAndModes(lm);
+    _sceneRoot->getOrCreateStateSet()->setMode(GL_CULL_FACE, osg::StateAttribute::ON);
+    _sceneRoot->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
 
     auto light = _viewer->getLight();
     light->setDiffuse(sgc.getVec4("scene.headlight.diffuse"));
@@ -531,9 +541,9 @@ void Game::restart()
     _totalTime = 60;
     _timerText->setText(std::to_string(_timer));
 
-    show(_scoreText);
-    show(_timerText);
-    show(_timerBar);
+    _scoreText->setNodeMask(nb_ui);
+    _timerText->setNodeMask(nb_ui);
+    _timerBar->setNodeMask(nb_ui);
 
     _status = gs_running;
 
@@ -549,17 +559,26 @@ void Game::restart()
     tp.z() += sgc.getFloat("camera.height");
     manipulator->setHomePosition(tp, osg::Vec3(), osg::Z_AXIS);
     _viewer->home();
+
+    auto wsize = osgq::getWindowRect(*_viewer);
+    resize(wsize.z(), wsize.w());
 }
 
 void Game::timeout()
 {
-    show(_msg);
+    _msg->setNodeMask(nb_ui);
     _msg->setText("Press r to start new game.");
     _status = gs_timeout;
 }
 
 void Game::resize(int width, int height)
 {
+    // resize default render target
+    {
+        auto ss = _root->getOrCreateStateSet();
+        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(width, height)));
+    }
+
     // reset hudcamera projection
     osg::Matrix m;
     m.makeOrtho(0, width, 0, height, -1, 1);
@@ -597,6 +616,29 @@ void Game::resize(int width, int height)
 
     _msg->setPosition(osg::Vec3(x, height - 16, 0));
     _msg->setAlignment(osgText::Text::LEFT_TOP);
+
+    if (_status == gs_init)
+    {
+        return;
+    }
+
+    // resize rtt cameras
+    auto size = std::max(height * 0.5f, std::max(width * 0.5f, 512.0f));
+    auto sizeScale = size / std::min(width, height);
+
+    _reflectRttCamera->resize(size, size);
+    {
+        auto ss = _reflectRttCamera->getOrCreateStateSet();
+        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(size, size)));
+        ss->addUniform(new osg::Uniform("render_target_scale", sizeScale));
+    }
+
+    _refractRttCamera->resize(size, size);
+    {
+        auto ss = _refractRttCamera->getOrCreateStateSet();
+        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(size, size)));
+        ss->addUniform(new osg::Uniform("render_target_scale", sizeScale));
+    }
 }
 
 void Game::moveCursor(float x, float y)
@@ -620,16 +662,6 @@ void Game::flashCursor(bool v)
 void Game::hide(osg::Node* node)
 {
     node->setNodeMask(0);
-}
-
-void Game::show(osg::Node* node)
-{
-    node->setNodeMask(nb_visible);
-}
-
-void Game::showReal(osg::Node* node)
-{
-    node->setNodeMask(nb_visible | nb_raytest);
 }
 
 osg::Vec3 Game::getTerrainPoint(float x, float y)
@@ -731,6 +763,7 @@ void Game::createTerrain()
     tile->setColorLayer(0, clayer);
 
     _terrain = new osgTerrain::Terrain;
+    _terrain->setNodeMask(nb_terrain);
     tile->setTerrain(_terrain);
     _terrain->addChild(tile);
 
@@ -748,11 +781,115 @@ void Game::createPool()
     auto radius = sgc.getFloat("pool.radius");
     auto top = sgc.getFloat("pool.top");
 
+    // reflect
+    {
+        _reflectMap = osgf::createTexture2D(GL_RGBA, 1, 1, osg::Texture::LINEAR,
+            osg::Texture::LINEAR, osg::Texture::REPEAT, osg::Texture::REPEAT);
+
+        _reflectRttCamera =
+            osgf::createRttCamera(0, 0, 1, 1, osg::Camera::FRAME_BUFFER_OBJECT);
+        _reflectRttCamera->attach(osg::Camera::COLOR_BUFFER, _reflectMap);
+        _reflectRttCamera->attach(
+            osg::Camera::PACKED_DEPTH_STENCIL_BUFFER, GL_DEPTH_STENCIL_EXT);
+        _reflectRttCamera->setCullMask(nb_above_waterline);
+        _reflectRttCamera->setClearMask(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        _reflectRttCamera->setCullingMode(_reflectRttCamera->getCullingMode() &
+                                          ~osg::CullSettings::SMALL_FEATURE_CULLING);
+        _reflectRttCamera->setUpdateCallback(osgf::getPruneCallback());
+        _reflectRttCamera->setEventCallback(osgf::getPruneCallback());
+        _root->addChild(_reflectRttCamera);
+
+        auto frame = new osg::MatrixTransform;
+        auto m = osg::Matrix::translate(osg::Vec3(0, 0, top));
+        m.preMultScale(osg::Vec3(1, 1, -1));
+        m.preMultTranslate(osg::Vec3(0, 0, -top));
+        frame->setMatrix(m);
+
+        _reflectRttCamera->addChild(frame);
+
+        auto clipNode = new osg::ClipNode;
+        auto clipPlane = new osg::ClipPlane;
+        clipPlane->setClipPlaneNum(0);
+        clipPlane->setClipPlane(0, 0, 1, -1);
+        clipNode->addClipPlane(clipPlane);
+
+        frame->addChild(clipNode);
+
+        auto ss = frame->getOrCreateStateSet();
+        ss->setMode(
+            GL_CLIP_PLANE0, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+        // ss->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT),
+        //     osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+
+        frame->addChild(_sceneRoot);
+    }
+
+    // refract{
+    {
+        _refractMap = osgf::createTexture2D(GL_RGBA, 1, 1, osg::Texture::LINEAR,
+            osg::Texture::LINEAR, osg::Texture::REPEAT, osg::Texture::REPEAT);
+        _depthMap = osgf::createTexture2D(GL_DEPTH_COMPONENT, 1, 1,
+            osg::Texture2D::LINEAR, osg::Texture2D::LINEAR, osg::Texture::REPEAT,
+            osg::Texture::REPEAT);
+
+        _refractRttCamera =
+            osgf::createRttCamera(0, 0, 1, 1, osg::Camera::FRAME_BUFFER_OBJECT);
+        _refractRttCamera->attach(osg::Camera::COLOR_BUFFER, _refractMap);
+        _refractRttCamera->attach(osg::Camera::DEPTH_BUFFER, _depthMap);
+        _refractRttCamera->setCullMask(nb_below_waterline);
+        _refractRttCamera->setClearMask(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+        _refractRttCamera->setUpdateCallback(osgf::getPruneCallback());
+        _refractRttCamera->setEventCallback(osgf::getPruneCallback());
+        _root->addChild(_refractRttCamera);
+
+        auto clipNode = new osg::ClipNode;
+        auto clipPlane = new osg::ClipPlane;
+        clipPlane->setClipPlaneNum(1);
+        clipPlane->setClipPlane(0, 0, -1, 1);
+        clipNode->addClipPlane(clipPlane);
+
+        _refractRttCamera->addChild(clipNode);
+
+        auto ss = _refractRttCamera->getOrCreateStateSet();
+        ss->setMode(
+            GL_CLIP_PLANE1, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+
+        _refractRttCamera->addChild(_sceneRoot);
+    }
+
+    // pool
     _pool = osg::createTexturedQuadGeometry(osg::Vec3(-radius, -radius, top),
         osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
-    show(_pool);
+    _pool->setNodeMask(nb_visible);
 
     _sceneRoot->addChild(_pool);
+
+    auto ss = _pool->getOrCreateStateSet();
+    ss->setAttributeAndModes(createProgram("shader/pool.vert", "shader/pool.frag"));
+
+    _dudvMap = new osg::Texture2D(osgDB::readImageFile("texture/dudv_map.png"));
+    _dudvMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+    _dudvMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
+    _normalMap = new osg::Texture2D(osgDB::readImageFile("texture/normal_map.png"));
+    _normalMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+    _normalMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
+
+    ss->setTextureAttributeAndModes(0, _reflectMap);
+    ss->setTextureAttributeAndModes(1, _refractMap);
+    ss->setTextureAttributeAndModes(2, _depthMap);
+    ss->setTextureAttributeAndModes(3, _dudvMap);
+    ss->setTextureAttributeAndModes(4, _normalMap);
+
+    ss->addUniform(new osg::Uniform("reflect_map", 0));
+    ss->addUniform(new osg::Uniform("refract_map", 1));
+    ss->addUniform(new osg::Uniform("depth_map", 2));
+    ss->addUniform(new osg::Uniform("dudv_map", 3));
+    ss->addUniform(new osg::Uniform("normal_map", 4));
+
+    auto material = new osg::Material;
+    material->setSpecular(osg::Material::FRONT_AND_BACK, osg::Vec4(0.6, 0.6, 0.6, 1));
+    material->setShininess(osg::Material::FRONT_AND_BACK, 50);
+    ss->setAttributeAndModes(material);
 }
 
 osg::Geometry* createGrass()
@@ -802,7 +939,7 @@ osg::Geometry* createGrass()
 void Game::createMeadow()
 {
     auto root = new osg::Group;
-    show(root);
+    root->setNodeMask(nb_unreal_object);
 
     auto pos = osg::Vec2();
 
@@ -858,8 +995,8 @@ void Game::createMeadow()
             frame->setMatrix(m);
             frame->addChild(grass);
 
-            auto groupCol = numGroups * i / cols ;
-            auto groupRow = numGroups * j / rows ;
+            auto groupCol = numGroups * i / cols;
+            auto groupRow = numGroups * j / rows;
             auto groupName =
                 "GrassGroup" + std::to_string(groupCol) + ":" + std::to_string(groupRow);
             auto parentGroup = grassGroups[groupName];
@@ -867,7 +1004,6 @@ void Game::createMeadow()
             parentGroup->addChild(frame);
             // OSG_DEBUG << "add grass " << i << ":" << j << " to group " << groupName
             //            << std::endl;
-
         }
     }
     OSG_NOTICE << "Create " << count << " grasses" << std::endl;
@@ -997,7 +1133,7 @@ void Game::createBurrows()
     auto poolRadius = sgc.getFloat("pool.radius");
     for (auto& p: points)
     {
-        if (p.length() - burrowRadius  < poolRadius)
+        if (p.length() - burrowRadius < poolRadius)
         {
             continue;
         }
@@ -1026,7 +1162,7 @@ Burrow Game::createBurrow(const osg::Vec3& pos, const osg::Vec3& normal)
     }
 
     auto frame = new osg::MatrixTransform;
-    showReal(frame);
+    frame->setNodeMask(nb_real_object);
     osg::Matrix m = osg::Matrix::rotate(osg::Z_AXIS, normal);
     m.postMultTranslate(pos);
     frame->setMatrix(m);
@@ -1086,15 +1222,14 @@ osg::Node* Game::createUI()
     _score = 0;
     _scoreText = createText("Score", "0", 18, osg::Vec3());
     _timerText = createText("Timer", "30", 18, osg::Vec3());
-    _msg = createText(
-        "Msg", "Press r to start new game.", 18, osg::Vec3());
+    _msg = createText("Msg", "Press r to start new game.", 18, osg::Vec3());
 
     auto root = new osg::Group;
     root->addChild(_scoreText);
     root->addChild(_msg);
     root->addChild(_timerText);
     root->addChild(_timerBar);
-    show(root);
+    root->setNodeMask(nb_ui);
 
     hide(_scoreText);
     hide(_timerText);
@@ -1177,16 +1312,13 @@ osg::Node* Game::createUI()
         }
     }
 
-    auto wsize = osgq::getWindowRect(*_viewer);
-    resize(wsize.z(), wsize.w());
-
     return root;
 }
 
 void Game::createStarfield()
 {
     auto root = new osg::Group;
-    show(root);
+    root->setNodeMask(nb_unreal_object);
     root->setName("Starfield");
 
     auto rootSS = root->getOrCreateStateSet();
@@ -1213,17 +1345,14 @@ void Game::createStarfield()
             static_cast<osg::Drawable::ComputeBoundingBoxCallback*>(
                 osgf::getInvalidComputeBoundingBoxCallback()));
 
-        auto point = new osg::Point(128);
-        point->setMaxSize(1024);
-
         auto ss = moon->getOrCreateStateSet();
-        ss->setAttributeAndModes(point);
+        ss->setMode(GL_VERTEX_PROGRAM_POINT_SIZE, osg::StateAttribute::ON);
         ss->setTextureAttributeAndModes(0, new osg::PointSprite());
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
 
-        static auto program = createProgram("shader/moon.frag", osg::Shader::FRAGMENT);
-        rootSS->setAttributeAndModes(program);
+        static auto program = createProgram("shader/moon.vert", "shader/moon.frag");
+        ss->setAttributeAndModes(program);
 
         projNode->addChild(moon);
 
@@ -1263,7 +1392,7 @@ void Game::createStarfield()
                 osgf::getInvalidComputeBoundingBoxCallback()));
 
         auto ss = stars->getOrCreateStateSet();
-        ss->setAttributeAndModes(new osg::Point(12));
+        ss->setMode(GL_VERTEX_PROGRAM_POINT_SIZE, osg::StateAttribute::ON);
         ss->setTextureAttributeAndModes(0, new osg::PointSprite());
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
@@ -1280,8 +1409,8 @@ void Game::createStarfield()
 void Game::playWhackAnimation(const osg::Vec3& pos)
 {
     auto l = new Lightning;
-    show(l);
-    l->setBillboardWidth(8);
+    l->setNodeMask(nb_unreal_object);
+    l->setBillboardWidth(sgc.getFloat("lightning.billboardWidth"));
     l->setMaxJitter(0.37);
     l->add("jjjjjj", pos + osg::Vec3(diskRand(5), 168), pos);
 
@@ -1302,6 +1431,7 @@ void Game::playWhackAnimation(const osg::Vec3& pos)
 void Game::popScore(const osg::Vec3& pos, int score)
 {
     auto text = createText("PopScore", std::to_string(score), 22, pos);
+    text->setNodeMask(nb_visible);
     text->setAlignment(osgText::Text::CENTER_CENTER);
     text->setCharacterSizeMode(osgText::Text::SCREEN_COORDS);
     text->setColor(osg::Vec4(1, 0, 0, 1));

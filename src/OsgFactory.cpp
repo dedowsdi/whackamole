@@ -464,6 +464,17 @@ private:
     CallbackFunction _func;
 };
 
+class PruneCallback : public osg::Callback
+{
+public:
+    PruneCallback() {}
+
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        return false;
+    }
+};
+
 class TimerFuncCallback : public osg::Callback
 {
 public:
@@ -514,6 +525,12 @@ osg::Callback* createCallback(CallbackFunction callback)
 osg::Callback* createTimerUpdateCallback(double time, CallbackFunction callback)
 {
     return new detail::TimerFuncCallback(time, callback);
+}
+
+osg::Callback* getPruneCallback()
+{
+    static auto callback = new detail::PruneCallback;
+    return callback;
 }
 
 osg::Callback* createTimerRemoveNodeUpdateCallback(double time, osg::Node* node)
@@ -845,8 +862,8 @@ osg::Drawable* createClearDrawable(int mask, const osg::Vec4& clearColor, float 
     return drawable;
 }
 
-osg::Texture2D* createTexture(
-    int internalFormat, int width, int height, int minFilter, int magFilter)
+osg::Texture2D* createTexture2D(int internalFormat, int width, int height, int minFilter,
+    int magFilter, int wrapS, int wrapT)
 {
     auto tex = new osg::Texture2D;
     tex->setInternalFormat(internalFormat);
@@ -855,6 +872,8 @@ osg::Texture2D* createTexture(
         osg::Texture::MIN_FILTER, static_cast<osg::Texture::FilterMode>(minFilter));
     tex->setFilter(
         osg::Texture::MAG_FILTER, static_cast<osg::Texture::FilterMode>(magFilter));
+    tex->setWrap(osg::Texture::WRAP_S, static_cast<osg::Texture::WrapMode>(wrapS));
+    tex->setWrap(osg::Texture::WRAP_T, static_cast<osg::Texture::WrapMode>(wrapT));
     return tex;
 }
 

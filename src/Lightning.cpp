@@ -57,9 +57,11 @@ Lightning::Lightning()
     // Closing gap block lines behind it, disable depth write for blending. If
     // you need depth, you must write this again without color mask.
     ss->setAttributeAndModes(new osg::Depth(osg::Depth::LESS, 0, 1, false));
-    ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF);
-    ss->setAttributeAndModes(new osg::BlendFunc(GL_ONE, GL_ONE));
-    ss->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::RGBA_MAX));
+    ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+    ss->setAttributeAndModes(new osg::BlendFunc(GL_ONE, GL_ONE),
+        osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
+    ss->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::RGBA_MAX),
+        osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
     ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
 
     setBillboardType(bt_per_line);

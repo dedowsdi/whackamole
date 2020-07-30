@@ -200,6 +200,8 @@ osg::Callback* createCallback(CallbackFunction callback);
 // execute call back after certain time, once only, removed immediately after that.
 osg::Callback* createTimerUpdateCallback(double time, CallbackFunction callback);
 
+osg::Callback* getPruneCallback();
+
 osg::Callback* createTimerRemoveNodeUpdateCallback(double time, osg::Node* node);
 
 using ComputeBoundingBoxCallbackFunction =
@@ -260,8 +262,8 @@ osg::Drawable* createClearDrawable(
 
 // Texture {{{1
 
-osg::Texture2D* createTexture(
-    int internalFormat, int width, int height, int minFilter, int magFilter);
+osg::Texture2D* createTexture2D(int internalFormat, int width, int height, int minFilter,
+    int magFilter, int wrapS, int wrapT);
 
 // tex is not stored. Use texture width height as copy width height if they are
 // 0.
