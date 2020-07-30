@@ -24,6 +24,11 @@ namespace osgText
 class Text;
 }
 
+namespace osgGA
+{
+class KeySwitchMatrixManipulator;
+}
+
 namespace toy
 {
 
@@ -219,6 +224,8 @@ private:
     osg::ref_ptr<osg::Texture2D> _normalMap;
     osg::ref_ptr<osg::Camera> _reflectRttCamera;
     osg::ref_ptr<osg::Camera> _refractRttCamera;
+
+    osg::ref_ptr<osgGA::KeySwitchMatrixManipulator> _manipulator;
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Burrow> _burrowList;

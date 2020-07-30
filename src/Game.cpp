@@ -299,13 +299,13 @@ void Game::preInit()
     camera->setClearMask(camera->getClearMask() | GL_STENCIL_BUFFER_BIT);
     camera->setClearStencil(0);
 
-    auto ksm = new osgGA::KeySwitchMatrixManipulator;
-    ksm->addMatrixManipulator(
+    _manipulator = new osgGA::KeySwitchMatrixManipulator;
+    _manipulator->addMatrixManipulator(
         osgGA::GUIEventAdapter::KEY_F7, "Trackball", new osgGA::TrackballManipulator);
-    ksm->addMatrixManipulator(
+    _manipulator->addMatrixManipulator(
         osgGA::GUIEventAdapter::KEY_F8, "Ghost", new GhostManipulator);
 
-    _viewer->setCameraManipulator(ksm);
+    _viewer->setCameraManipulator(_manipulator);
 }
 
 void Game::postInit()
@@ -368,6 +368,14 @@ void Game::popMole()
     endPos -= burrow.normal * (bb.zMin() - 2);
 
     auto rot = osg::Matrix::rotate(osg::Z_AXIS, burrow.normal);
+
+    // face mole to camera, rotate along local up
+    auto eye = getMainCamera()->getInverseViewMatrix().getTrans();
+    auto ev = eye - startPos;
+    ev = rot * ev; // get local ev
+    auto theta = std::atan2(ev.x(), -ev.y());
+    rot = osg::Matrix::rotate(theta, osg::Z_AXIS) * rot;
+
     mole->setMatrix(rot * osg::Matrix::translate(startPos));
 
     auto animPath = new osg::AnimationPath;
