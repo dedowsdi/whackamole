@@ -587,6 +587,7 @@ void Game::resize(int width, int height)
     {
         auto ss = _root->getOrCreateStateSet();
         ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(width, height)));
+        ss->addUniform(new osg::Uniform("render_target_scale", 1.0f));
     }
 
     // reset hudcamera projection
@@ -632,22 +633,22 @@ void Game::resize(int width, int height)
         return;
     }
 
-    // resize rtt cameras
-    auto size = std::max(height * 0.5f, std::max(width * 0.5f, 512.0f));
-    auto sizeScale = size / std::min(width, height);
+    // resize rtt cameras.
+    // I start this with 0.5, but it cause glitches in the pool edge.
+    auto scale = 1.0f;
 
-    _reflectRttCamera->resize(size, size);
+    _reflectRttCamera->resize(width * scale, height * scale);
     {
         auto ss = _reflectRttCamera->getOrCreateStateSet();
-        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(size, size)));
-        ss->addUniform(new osg::Uniform("render_target_scale", sizeScale));
+        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(width * scale, height * scale)));
+        ss->addUniform(new osg::Uniform("render_target_scale", scale));
     }
 
-    _refractRttCamera->resize(size, size);
+    _refractRttCamera->resize(width * scale, height * scale);
     {
         auto ss = _refractRttCamera->getOrCreateStateSet();
-        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(size, size)));
-        ss->addUniform(new osg::Uniform("render_target_scale", sizeScale));
+        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(width * scale, height * scale)));
+        ss->addUniform(new osg::Uniform("render_target_scale", scale));
     }
 }
 
@@ -780,7 +781,7 @@ void Game::createTerrain()
     auto ss = _terrain->getOrCreateStateSet();
 
     auto material = new osg::Material;
-    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.5, 0.5, 0.5, 0.5));
+    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.75, 0.75, 0.75, 1));
     ss->setAttributeAndModes(material);
 
     _sceneRoot->addChild(_terrain);
@@ -795,6 +796,7 @@ void Game::createPool()
     {
         _reflectMap = osgf::createTexture2D(GL_RGBA, 1, 1, osg::Texture::LINEAR,
             osg::Texture::LINEAR, osg::Texture::REPEAT, osg::Texture::REPEAT);
+        _reflectMap->setResizeNonPowerOfTwoHint(false);
 
         _reflectRttCamera =
             osgf::createRttCamera(0, 0, 1, 1, osg::Camera::FRAME_BUFFER_OBJECT);
@@ -822,7 +824,7 @@ void Game::createPool()
         auto clipNode = new osg::ClipNode;
         auto clipPlane = new osg::ClipPlane;
         clipPlane->setClipPlaneNum(0);
-        clipPlane->setClipPlane(0, 0, 1, -1);
+        clipPlane->setClipPlane(0, 0, 1, -top);
         clipNode->addClipPlane(clipPlane);
 
         frame->addChild(clipNode);
@@ -839,10 +841,12 @@ void Game::createPool()
     // refract{
     {
         _refractMap = osgf::createTexture2D(GL_RGBA, 1, 1, osg::Texture::LINEAR,
-            osg::Texture::LINEAR, osg::Texture::REPEAT, osg::Texture::REPEAT);
-        _depthMap = osgf::createTexture2D(GL_DEPTH_COMPONENT, 1, 1,
-            osg::Texture2D::LINEAR, osg::Texture2D::LINEAR, osg::Texture::REPEAT,
-            osg::Texture::REPEAT);
+            osg::Texture::LINEAR, osg::Texture::CLAMP_TO_EDGE, osg::Texture::CLAMP_TO_EDGE);
+        _refractMap->setResizeNonPowerOfTwoHint(false);
+        _depthMap = osgf::createTexture2D(GL_DEPTH_COMPONENT, 1, 1, osg::Texture2D::LINEAR,
+            osg::Texture2D::NEAREST, osg::Texture::CLAMP_TO_EDGE,
+            osg::Texture::CLAMP_TO_EDGE);
+        _depthMap->setResizeNonPowerOfTwoHint(false);
 
         _refractRttCamera =
             osgf::createRttCamera(0, 0, 1, 1, osg::Camera::FRAME_BUFFER_OBJECT);
@@ -859,7 +863,7 @@ void Game::createPool()
         auto clipNode = new osg::ClipNode;
         auto clipPlane = new osg::ClipPlane;
         clipPlane->setClipPlaneNum(1);
-        clipPlane->setClipPlane(0, 0, -1, 1);
+        clipPlane->setClipPlane(0, 0, -1, top);
         clipNode->addClipPlane(clipPlane);
 
         _refractRttCamera->addChild(clipNode);
@@ -881,6 +885,9 @@ void Game::createPool()
 
     auto ss = _pool->getOrCreateStateSet();
     ss->setAttributeAndModes(createProgram("shader/pool.vert", "shader/pool.frag"));
+    ss->setAttributeAndModes(
+        new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+    ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
 
     _dudvMap = new osg::Texture2D(osgDB::readImageFile("texture/dudv_map.png"));
     _dudvMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
@@ -957,13 +964,9 @@ void Game::createMeadow()
     root->setName("Meadow");
     root->setNodeMask(nb_unreal_object);
 
-    auto pos = osg::Vec2();
-
     auto grass = createGrass();
     auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
-
     auto step = sgc.getFloat("meadow.grass.step") * sgc.getFloat("meadow.grass.size");
-
     auto numGroups = sgc.getInt("meadow.numGroupsPerRow");
 
     // create grass groups to speed up cull traversal
@@ -984,8 +987,9 @@ void Game::createMeadow()
     int rows = _sceneRadius * 2 / step;
 
     auto poolRadius = sgc.getFloat("pool.radius");
-
+    auto pos = osg::Vec2();
     auto count = 0;
+
     for (auto i = 1; i < cols - 1; ++i)
     {
         pos.y() = i % 2 ? 0 : 0.5 * step;
@@ -1024,31 +1028,26 @@ void Game::createMeadow()
     }
     OSG_NOTICE << "Create " << count << " grasses" << std::endl;
 
-    static osg::StateSet* ss = 0;
-    if (!ss)
-    {
-        ss = root->getOrCreateStateSet();
+    auto ss = root->getOrCreateStateSet();
 
-        auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
-        texture->setResizeNonPowerOfTwoHint(false);
-        ss->setTextureAttributeAndModes(0, texture);
+    auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
+    texture->setResizeNonPowerOfTwoHint(false);
+    ss->setTextureAttributeAndModes(0, texture);
 
-        auto material = new osg::Material;
-        material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));
+    auto material = new osg::Material;
+    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));
 
-        ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
-        ss->setAttributeAndModes(material);
-        ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-        ss->setAttributeAndModes(new osg::BlendFunc(
-            osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+    ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+    ss->setAttributeAndModes(material);
+    ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+    ss->setAttributeAndModes(
+        new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
 
-        auto prg = createProgram("shader/grass.vert", "shader/grass.frag");
-        ss->setAttributeAndModes(prg);
+    auto prg = createProgram("shader/grass.vert", "shader/grass.frag");
+    ss->setAttributeAndModes(prg);
 
-        ss->addUniform(new osg::Uniform("viewMatrix", osg::Matrixf()));
-        ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
-    }
-    root->setStateSet(ss);
+    ss->addUniform(new osg::Uniform("viewMatrix", osg::Matrixf()));
+    ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
     auto uf = ss->getUniform("explosions");
 
     // update explosion uniform

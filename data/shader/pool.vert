@@ -1,7 +1,5 @@
 #version 120
 
-// varying vec4 clipVertex;
-
 uniform float tiling = 0.5;
 
 varying vec3 vertex;
