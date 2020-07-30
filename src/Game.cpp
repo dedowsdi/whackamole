@@ -544,7 +544,7 @@ void Game::restart()
 
     _burrowList.clear();
     createBurrows();
-    _explosions.assign(16, osg::Vec4());
+    _explosions.assign(8, osg::Vec4());
 
     hide(_msg);
     _timer = 60;
@@ -1050,16 +1050,24 @@ void Game::createMeadow()
     ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
     auto uf = ss->getUniform("explosions");
 
-    // update explosion uniform
+    // update explosion uniform.
+    // This cull callback is called by both main camera and reflectRttCamera, it only update
+    // uniform for main camera, which means you won't see grass animation in the pool, this
+    // shouldn't matter, as you can only see only a few of grasses anyway. If you really
+    // want grass animation, you must create a new node with a new stateset to pass
+    // explosion uniform.
     root->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
-        auto& viewMatrix =
-            data->asNodeVisitor()->asCullVisitor()->getCurrentCamera()->getViewMatrix();
-        for (auto i = 0; i < _explosions.size(); ++i)
+        auto visitor = data->asNodeVisitor()->asCullVisitor();
+        if (visitor->getCurrentCamera() == getMainCamera())
         {
-            auto& e = _explosions[i];
-            osg::Vec4 v = osg::Vec4(e.x(), e.y(), e.z(), 1) * viewMatrix;
-            v.w() = e.w();
-            uf->setElement(i, v);
+            auto& viewMatrix = *visitor->getModelViewMatrix();
+            for (auto i = 0; i < _explosions.size(); ++i)
+            {
+                auto& e = _explosions[i];
+                osg::Vec4 v = osg::Vec4(e.x(), e.y(), e.z(), 1) * viewMatrix;
+                v.w() = e.w();
+                uf->setElement(i, v);
+            }
         }
     }));
 
@@ -1471,15 +1479,22 @@ void Game::explode(const osg::Vec3& pos)
     if (iter == _explosions.end())
     {
         OSG_NOTICE << "Running out of explosions" << std::endl;
+        return;
     }
 
-    *iter = osg::Vec4(pos, sgc.getFloat("lightning.explosionForce"));
+    auto force = sgc.getFloat("lightning.explosionForce");
+    auto duration = sgc.getFloat("lightning.explosionDuration");
+    *iter = osg::Vec4(pos, force);
     auto index = std::distance(_explosions.begin(), iter);
-    auto explosionUpdater = osgf::createCallback(
-        [=](auto obj, auto data) { _explosions[index].w() -= sgg.getDeltaTime() * 5; });
+    auto explosionUpdater = osgf::createCallback([=](auto obj, auto data) {
+        _explosions[index].w() -= sgg.getDeltaTime() * force / duration;
+    });
     _sceneRoot->addUpdateCallback(explosionUpdater);
-    _sceneRoot->addUpdateCallback(osgf::createTimerUpdateCallback(2.5,
-        [=](auto obj, auto data) { _sceneRoot->removeUpdateCallback(explosionUpdater); }));
+    _sceneRoot->addUpdateCallback(
+        osgf::createTimerUpdateCallback(duration, [=](auto obj, auto data) {
+            _sceneRoot->removeUpdateCallback(explosionUpdater);
+            _explosions[index].w() = 0;
+        }));
 }
 
 class StartAnimationUpdater : public osg::Callback

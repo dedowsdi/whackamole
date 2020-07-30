@@ -1,9 +1,9 @@
 #version 120
 
-#define MAX_EXPLOSIONS 16
+#define MAX_EXPLOSIONS 8
 #define MAX_DISTANCE 32
 
-uniform vec4 explosions[16];  // view space
+uniform vec4 explosions[MAX_EXPLOSIONS];  // view space
 
 void main(void)
 {
