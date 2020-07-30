@@ -31,14 +31,6 @@ int main(int argc, char* argv[])
     toy::ToyViewer viewer;
     sgg.init(argc, argv, &viewer);
 
-    auto camera = viewer.getCamera();
-    camera->setName("MainCamera");
-
-    auto lm = new osg::LightModel;
-    lm->setLocalViewer(true);
-
-    camera->getOrCreateStateSet()->setAttributeAndModes(lm);
-
     // Add some debug handlers:
     // f1   Stat
     // f2   Print scene

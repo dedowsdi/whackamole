@@ -23,6 +23,7 @@ void BaseGame::clear() {}
 void BaseGame::init(int argc, char* argv[], osgViewer::Viewer* viewer)
 {
     _viewer = viewer;
+    _viewer->getCamera()->setName("MainCamera");
 
     preInit();
 
@@ -184,7 +185,7 @@ void BaseGame::createSound(int argc, char* argv[])
 void BaseGame::createRoots()
 {
     _root = new osg::Group();
-    _root->setName("BaseGame");
+    _root->setName("Root");
 
 #ifdef DEBUG
     _observer = new ResourceObserver;

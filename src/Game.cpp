@@ -130,6 +130,8 @@ private:
         if (!sgg.getViewer()->computeIntersections(ea, iss, nb_raytest))
             return 0;
 
+        // intersections are sorted by ratio, 1st one is the nearest. Don't use
+        // LIMIT_NEAREST, it's used for bounding sphere intersection test.
         auto& np = iss.begin()->nodePath;
         auto iter = std::find_if(np.begin(), np.end(), [](osg::Node* node) -> bool {
             return node->getName().find_first_of("Mole") == 0 && dynamic_cast<Mole*>(node);
@@ -796,6 +798,8 @@ void Game::createPool()
 
         _reflectRttCamera =
             osgf::createRttCamera(0, 0, 1, 1, osg::Camera::FRAME_BUFFER_OBJECT);
+        _reflectRttCamera->setName("ReflectRttCamera");
+        _reflectRttCamera->setNodeMask(nb_above_waterline);
         _reflectRttCamera->attach(osg::Camera::COLOR_BUFFER, _reflectMap);
         _reflectRttCamera->attach(
             osg::Camera::PACKED_DEPTH_STENCIL_BUFFER, GL_DEPTH_STENCIL_EXT);
@@ -826,8 +830,8 @@ void Game::createPool()
         auto ss = frame->getOrCreateStateSet();
         ss->setMode(
             GL_CLIP_PLANE0, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
-        // ss->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT),
-        //     osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+        ss->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT),
+            osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
 
         frame->addChild(_sceneRoot);
     }
@@ -842,6 +846,8 @@ void Game::createPool()
 
         _refractRttCamera =
             osgf::createRttCamera(0, 0, 1, 1, osg::Camera::FRAME_BUFFER_OBJECT);
+        _refractRttCamera->setNodeMask(nb_below_waterline);
+        _refractRttCamera->setName("RefractRttCamera");
         _refractRttCamera->attach(osg::Camera::COLOR_BUFFER, _refractMap);
         _refractRttCamera->attach(osg::Camera::DEPTH_BUFFER, _depthMap);
         _refractRttCamera->setCullMask(nb_below_waterline);
@@ -868,6 +874,7 @@ void Game::createPool()
     // pool
     _pool = osg::createTexturedQuadGeometry(osg::Vec3(-radius, -radius, top),
         osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
+    _pool->setName("Pool");
     _pool->setNodeMask(nb_visible);
 
     _sceneRoot->addChild(_pool);
@@ -947,6 +954,7 @@ osg::Geometry* createGrass()
 void Game::createMeadow()
 {
     auto root = new osg::Group;
+    root->setName("Meadow");
     root->setNodeMask(nb_unreal_object);
 
     auto pos = osg::Vec2();
@@ -1028,6 +1036,7 @@ void Game::createMeadow()
         auto material = new osg::Material;
         material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));
 
+        ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
         ss->setAttributeAndModes(material);
         ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
         ss->setAttributeAndModes(new osg::BlendFunc(
