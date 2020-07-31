@@ -10,48 +10,86 @@
 #    define MAX_EXPLOSIONS 8
 #endif
 
-#pragma import_defines(MAX_SWAY_DISTANCE)
-#ifndef MAX_SWAY_DISTANCE
-#    define MAX_SWAY_DISTANCE 32
+#pragma import_defines(EXPLOSION_RADIUS)
+#ifndef EXPLOSION_RADIUS
+#    define EXPLOSION_RADIUS 32
 #endif
 
-uniform vec4 explosions[MAX_EXPLOSIONS];  // view space
+#pragma import_defines(NUM_WINDS)
+#ifndef NUM_WINDS
+#    define NUM_WINDS 4
+#endif
+
+// world space
+uniform vec4 explosions[MAX_EXPLOSIONS];
+
+struct wind
+{
+    float amplitude;
+    float frequence;
+    float phi;
+    float exponent;
+    vec2 direction;
+};
+
+uniform wind winds[NUM_WINDS];
+uniform float osg_SimulationTime;
 
 uniform float size;
 
-const vec2 tc0 = vec2(0);
-const vec2 tc1 = vec2(1, 0);
-const vec2 tc2 = vec2(1, 1);
-const vec2 tc3 = vec2(0, 1);
+vec3 applyExplosions(vec3 pos)
+{
+    vec3 trans = vec3(0);
+    for (int i = 0; i < MAX_EXPLOSIONS; i++)
+    {
+        float force = explosions[i].w;
+        if (force <= 0)
+        {
+            continue;
+        }
+
+        vec3 exp_to_grass = pos - explosions[i].xyz;
+        exp_to_grass.z = 0;
+        float dist = length(exp_to_grass);
+        force *= pow(clamp(1 - dist / EXPLOSION_RADIUS, 0, 1), 0.35);
+        trans += exp_to_grass * force / dist;
+    }
+    return trans;
+}
+
+vec3 applyWinds(vec3 pos)
+{
+    vec3 trans = vec3(0);
+
+    for (int i = 0; i < NUM_WINDS; i++)
+    {
+        wind w = winds[i];
+        float inner = dot(w.direction, pos.xy) * w.frequence + osg_SimulationTime * w.phi;
+        float base = (sin(inner) + 1) / 2;
+        trans.xy += 2 * w.amplitude * pow(base, w.exponent) * w.direction;
+    }
+
+    return trans;
+}
+
 
 void emit_vertex(vec3 pos, vec2 tc)
 {
     if(tc.t > 0.5)
     {
-        vec4 vertex = gl_ModelViewMatrix * vec4(pos, 1);
-        for (int i = 0; i < MAX_EXPLOSIONS; i++)
-        {
-            float force = explosions[i].w;
-            if (force <= 0)
-            {
-                continue;
-            }
+        pos += applyExplosions(pos) + applyWinds(pos);
+    }
 
-            vec3 pos = explosions[i].xyz;
-            float dist = length(pos - vertex.xyz);
-            force *= pow(clamp(1 - dist / MAX_SWAY_DISTANCE, 0, 1), 0.35);
-            vertex.xyz += normalize(vertex.xyz - pos) * force;
-        }
-        gl_Position = gl_ProjectionMatrix * vertex;
-    }
-    else
-    {
-        gl_Position = gl_ModelViewProjectionMatrix * vec4(pos, 1);
-    }
+    gl_Position = gl_ModelViewProjectionMatrix * vec4(pos, 1);
 
     gl_TexCoord[0].xy = tc;
     EmitVertex();
 }
+
+const vec2 tc0 = vec2(0);
+const vec2 tc1 = vec2(1, 0);
+const vec2 tc2 = vec2(1, 1);
+const vec2 tc3 = vec2(0, 1);
 
 void main(void)
 {

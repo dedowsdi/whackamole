@@ -41,6 +41,35 @@ struct Burrow
     osg::Vec3 getTopCenter();
 };
 
+// see
+// https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-1-effective-water-simulation-physical-models
+// for detail
+class Wind
+{
+public:
+    Wind();
+
+    void update(double dt);
+
+    void updateUniform(osg::StateSet& ss, int index);
+
+    float frequence() { return osg::PIf * 2 / _length; }
+    float phi() { return frequence() * _speed; }
+
+private:
+    void mutate();
+
+    float _length = 0; // distance between two crest
+    float _amplitude = 0;
+    float _strength = 0; // current amplitude
+    float _speed = 0; // distance per second
+    float _exponent = 0;
+    float _time = 0; // left duration
+    float _duration = 0;
+
+    osg::Vec2 _direction;
+};
+
 class Mole : public osg::MatrixTransform
 {
 public:
@@ -227,9 +256,9 @@ private:
     osg::ref_ptr<osg::Camera> _refractRttCamera;
 
     osg::ref_ptr<osgGA::KeySwitchMatrixManipulator> _manipulator;
-    
 
     std::vector<osg::Vec4> _explosions;
+    std::vector<Wind> _winds;
     std::vector<Burrow> _burrowList;
 
     std::map<Mole*, osg::Callback*> _removeMoleCallbacks;

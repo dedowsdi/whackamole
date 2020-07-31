@@ -7,10 +7,14 @@
 #include <osg/AnimationPath>
 #include <osg/BlendFunc>
 #include <osg/Camera>
+#include <osg/ClipNode>
+#include <osg/ClipPlane>
 #include <osg/ComputeBoundsVisitor>
 #include <osg/CullFace>
 #include <osg/Depth>
 #include <osg/Geometry>
+#include <osg/LightModel>
+#include <osg/LightSource>
 #include <osg/LineWidth>
 #include <osg/Material>
 #include <osg/MatrixTransform>
@@ -34,10 +38,6 @@
 #include <osgUtil/PerlinNoise>
 #include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
-#include <osg/LightModel>
-#include <osg/LightSource>
-#include <osg/ClipNode>
-#include <osg/ClipPlane>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
@@ -58,6 +58,68 @@ namespace toy
 osg::Vec3 Burrow::getTopCenter()
 {
     return osg::Vec3(0, 0, sgc.getFloat("burrow.height") * 0.5f) * node->getMatrix();
+}
+
+Wind::Wind()
+{
+    mutate();
+}
+
+void Wind::update(double dt)
+{
+    _time -= dt;
+    if(_time < 0)
+    {
+        mutate();
+    }
+    else if (_time >= _duration * 0.8)
+    {
+        // fade in
+        _strength = mix(0.0f, _amplitude, (_duration - _time) / (_duration * 0.2f) );
+    }
+    else if(_time <= _duration * 0.2 )
+    {
+        // fade out
+        _strength = mix(0.0f, _amplitude, _time / (_duration * 0.2f) );
+    }
+    else
+    {
+        _strength = _amplitude;
+    }
+}
+
+void Wind::updateUniform(osg::StateSet& ss, int index)
+{
+    std::string base = "winds[" + std::to_string(index) + "]";
+
+    if (!ss.getUniform(base + ".amplitude"))
+    {
+        ss.addUniform(new osg::Uniform((base + ".amplitude").c_str(), _strength));
+        ss.addUniform(new osg::Uniform((base + ".frequence").c_str(), frequence()));
+        ss.addUniform(new osg::Uniform((base + ".phi").c_str(), phi()));
+        ss.addUniform(new osg::Uniform((base + ".exponent").c_str(), _exponent));
+        ss.addUniform(new osg::Uniform((base + ".direction").c_str(), _direction));
+    }
+    else
+    {
+        ss.getUniform(base + ".amplitude")->set(_strength);
+        ss.getUniform(base + ".frequence")->set(frequence());
+        ss.getUniform(base + ".phi")->set(phi());
+        ss.getUniform(base + ".exponent")->set(_exponent);
+        ss.getUniform(base + ".direction")->set(_direction);
+    }
+}
+
+void Wind::mutate()
+{
+    _amplitude = clamp(gaussRand(sgc.getVec2("wind.amplitude.gauss")), 0.01f, 999.f);
+    _exponent = clamp(gaussRand(sgc.getVec2("wind.exponent.gauss")), 0.0f, 999.f);
+    _speed = clamp(gaussRand(sgc.getVec2("wind.speed.gauss")), 0.0f, 999.f);
+    _length = clamp(gaussRand(sgc.getVec2("wind.length.gauss")), 0.0f, 99999.f);;
+    _duration = clamp(gaussRand(sgc.getVec2("wind.duration")), 0.0f, 99999.f);;
+    _time = _duration;
+    _direction = circularRand(1.0f);
+    _strength = 0;
 }
 
 class GameEventHandler : public osgGA::GUIEventHandler
@@ -374,7 +436,7 @@ void Game::popMole()
     // face mole to camera, rotate along local up
     auto eye = getMainCamera()->getInverseViewMatrix().getTrans();
     auto ev = eye - startPos;
-    ev = rot * ev; // get local ev
+    ev = rot * ev;  // get local ev
     auto theta = std::atan2(ev.x(), -ev.y());
     rot = osg::Matrix::rotate(theta, osg::Z_AXIS) * rot;
 
@@ -605,10 +667,10 @@ void Game::resize(int width, int height)
     auto corner = osg::Vec3(x, y, 0);
     auto widthVec = osg::Vec3(barSize.x(), 0, 0);
     auto heightVec = osg::Vec3(0, barSize.y(), 0);
-    (*vertices)[0] = corner+heightVec;
+    (*vertices)[0] = corner + heightVec;
     (*vertices)[1] = corner;
-    (*vertices)[2] = corner+widthVec;
-    (*vertices)[3] = corner+widthVec+heightVec;
+    (*vertices)[2] = corner + widthVec;
+    (*vertices)[3] = corner + widthVec + heightVec;
     vertices->dirty();
     _timerBar->dirtyGLObjects();
     _timerBar->dirtyBound();
@@ -639,14 +701,16 @@ void Game::resize(int width, int height)
     _reflectRttCamera->resize(width * scale, height * scale);
     {
         auto ss = _reflectRttCamera->getOrCreateStateSet();
-        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(width * scale, height * scale)));
+        ss->addUniform(new osg::Uniform(
+            "render_target_size", osg::Vec2(width * scale, height * scale)));
         ss->addUniform(new osg::Uniform("render_target_scale", scale));
     }
 
     _refractRttCamera->resize(width * scale, height * scale);
     {
         auto ss = _refractRttCamera->getOrCreateStateSet();
-        ss->addUniform(new osg::Uniform("render_target_size", osg::Vec2(width * scale, height * scale)));
+        ss->addUniform(new osg::Uniform(
+            "render_target_size", osg::Vec2(width * scale, height * scale)));
         ss->addUniform(new osg::Uniform("render_target_scale", scale));
     }
 }
@@ -737,23 +801,23 @@ void Game::createTerrain()
         noiseFactor[1] += yStep;
         noiseFactor[0] = 0;
 
-            for (int x = 0; x < cols; ++x)
+        for (int x = 0; x < cols; ++x)
+        {
+            noiseFactor[0] += xStep;
+            auto h =
+                pn.PerlinNoise2D(noiseFactor[0], noiseFactor[1], 2, 2, 3) * _sceneHeight;
+
+            // dig pool
+            auto vertex = _heightField->getVertex(x, y);
+            auto l = osg::Vec2(vertex.x(), vertex.y()).length();
+            if (l < poolRadius)
             {
-                noiseFactor[0] += xStep;
-                auto h = pn.PerlinNoise2D(noiseFactor[0], noiseFactor[1], 2, 2, 3) *
-                         _sceneHeight;
-
-                // dig pool
-                auto vertex = _heightField->getVertex(x, y);
-                auto l = osg::Vec2(vertex.x(), vertex.y()).length();
-                if (l < poolRadius)
-                {
-                    h -= mix(0.0f, poolDepth,
-                        1.0f - smoothstep(poolBottomRadius, poolRadius, l));
-                }
-
-                _heightField->setHeight(x, y, h);
+                h -= mix(
+                    0.0f, poolDepth, 1.0f - smoothstep(poolBottomRadius, poolRadius, l));
             }
+
+            _heightField->setHeight(x, y, h);
+        }
     }
 
     auto locator = new osgTerrain::Locator;
@@ -789,7 +853,6 @@ void Game::createTerrain()
 class FishUpdater : public osg::Callback
 {
 public:
-
     bool run(osg::Object* object, osg::Object* data) override
     {
         auto fish = static_cast<osg::MatrixTransform*>(object);
@@ -805,8 +868,8 @@ public:
         }
         return traverse(object, data);
     }
-private:
 
+private:
     void reset(osg::MatrixTransform& fish)
     {
         auto radius = sgc.getFloat("pool.bottomRadius");
@@ -864,7 +927,8 @@ void Game::createPool()
         _reflectRttCamera->attach(
             osg::Camera::PACKED_DEPTH_STENCIL_BUFFER, GL_DEPTH_STENCIL_EXT);
         _reflectRttCamera->setCullMask(nb_above_waterline);
-        _reflectRttCamera->setClearMask(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        _reflectRttCamera->setClearMask(
+            GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
         _reflectRttCamera->setCullingMode(_reflectRttCamera->getCullingMode() &
                                           ~osg::CullSettings::SMALL_FEATURE_CULLING);
         _reflectRttCamera->setUpdateCallback(osgf::getPruneCallback());
@@ -1102,16 +1166,16 @@ void Game::createMeadow()
         new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
 
     auto prg = createProgram("shader/grass.vert", "shader/grass.geom", "shader/grass.frag",
-            GL_POINTS, GL_TRIANGLE_STRIP, 18);
+        GL_POINTS, GL_TRIANGLE_STRIP, 18);
     ss->setAttributeAndModes(prg);
 
     ss->addUniform(new osg::Uniform("size", grassSize));
     ss->addUniform(new osg::Uniform("viewMatrix", osg::Matrixf()));
     ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
     auto maxExplosions = sgc.getInt("meadow.maxExplosions");
-    auto maxSwayDistance = sgc.getInt("meadow.grass.maxSwayDistance");
+    auto explosionRadius = sgc.getInt("lightning.explosionRadius");
     ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
-    ss->setDefine("MAX_SWAY_DISTANCE", std::to_string(maxSwayDistance));
+    ss->setDefine("EXPLOSION_RADIUS", std::to_string(explosionRadius));
 
     _explosions.assign(maxExplosions, osg::Vec4());
     // update explosion uniform.
@@ -1120,19 +1184,24 @@ void Game::createMeadow()
     // shouldn't matter, as you can only see only a few of grasses anyway. If you really
     // want grass animation, you must create a new node with a new stateset to pass
     // explosion uniform.
-    auto uf = ss->getUniform("explosions");
+    auto explosionUniform = ss->getUniform("explosions");
     root->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
         if (visitor->getCurrentCamera() == getMainCamera())
         {
-            auto& viewMatrix = *visitor->getModelViewMatrix();
             for (auto i = 0; i < _explosions.size(); ++i)
             {
-                auto& e = _explosions[i];
-                osg::Vec4 v = osg::Vec4(e.x(), e.y(), e.z(), 1) * viewMatrix;
-                v.w() = e.w();
-                uf->setElement(i, v);
+                explosionUniform->setElement(i, _explosions[i]);
             }
+        }
+    }));
+
+    _winds.resize(sgc.getInt("wind.count"));
+    root->addUpdateCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+        for (auto i = 0; i < _winds.size(); ++i)
+        {
+            _winds[i].update(sgg.getDeltaTime());
+            _winds[i].updateUniform(*ss, i);
         }
     }));
 
