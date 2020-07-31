@@ -544,7 +544,6 @@ void Game::restart()
 
     _burrowList.clear();
     createBurrows();
-    _explosions.assign(8, osg::Vec4());
 
     hide(_msg);
     _timer = 60;
@@ -1005,81 +1004,33 @@ void Game::createPool()
     }
 }
 
-osg::Geometry* createGrass()
-{
-    auto geometry = new osg::Geometry;
-    geometry->setName("Grass");
-
-    auto vertices = new osg::Vec3Array();
-    auto texcoords = new osg::Vec2Array();
-    // vertices->reserve( * 6 * 4);
-
-    auto grassSize = sgc.getFloat("meadow.grass.size");
-    auto hsize = grassSize * 0.5;
-    for (auto j = 0; j < 3; ++j)
-    {
-        auto angle = osg::PI * j / 3;
-
-        auto p0 = osg::Vec3(-cos(angle) * hsize, sin(angle) * hsize, 0);
-        auto p1 = osg::Vec3(-p0.x(), -p0.y(), 0);
-        auto p2 = osg::Vec3(p1.x(), p1.y(), grassSize);
-        auto p3 = osg::Vec3(p0.x(), p0.y(), grassSize);
-
-        vertices->push_back(p0);
-        vertices->push_back(p1);
-        vertices->push_back(p2);
-
-        vertices->push_back(p0);
-        vertices->push_back(p2);
-        vertices->push_back(p3);
-
-        texcoords->push_back(osg::Vec2(0, 0));
-        texcoords->push_back(osg::Vec2(1, 0));
-        texcoords->push_back(osg::Vec2(1, 1));
-
-        texcoords->push_back(osg::Vec2(0, 0));
-        texcoords->push_back(osg::Vec2(1, 1));
-        texcoords->push_back(osg::Vec2(0, 1));
-    }
-
-    geometry->setVertexArray(vertices);
-    geometry->setTexCoordArray(0, texcoords);
-    geometry->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLES, 0, vertices->size()));
-
-    return geometry;
-}
-
 void Game::createMeadow()
 {
     auto root = new osg::Group;
     root->setName("Meadow");
     root->setNodeMask(nb_unreal_object);
 
-    auto grass = createGrass();
     auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
-    auto step = sgc.getFloat("meadow.grass.step") * sgc.getFloat("meadow.grass.size");
+    auto grassSize = sgc.getFloat("meadow.grass.size");
+    auto step = sgc.getFloat("meadow.grass.step") * grassSize;
     auto numGroups = sgc.getInt("meadow.numGroupsPerRow");
-
-    // create grass groups to speed up cull traversal
-    std::map<std::string, osg::Group*> grassGroups;
-    for (auto i = 0; i < numGroups; i++)
-    {
-        for (auto j = 0; j < numGroups; j++)
-        {
-            auto group = new osg::Group;
-            group->setName("GrassGroup" + std::to_string(i) + ":" + std::to_string(j));
-            root->addChild(group);
-            grassGroups[group->getName()] = group;
-        }
-    }
 
     // create grasses
     int cols = _sceneRadius * 2 / step;
     int rows = _sceneRadius * 2 / step;
 
     auto poolRadius = sgc.getFloat("pool.radius");
+    auto poolRadius2 = poolRadius * poolRadius;
     auto pos = osg::Vec2();
     auto count = 0;
+
+    auto geometry = new osg::Geometry;
+    geometry->setName("Grass");
+
+    auto vertices = new osg::Vec3Array();
+    vertices->reserve(cols * rows);
+
+    auto hsize = grassSize * 0.5;
 
     for (auto i = 1; i < cols - 1; ++i)
     {
@@ -1090,33 +1041,49 @@ void Game::createMeadow()
         {
             pos.y() += step;
 
-            auto p = osg::Vec2(origin + pos + toy::diskRand(step * 0.25));
-
-            if (p.length() < poolRadius)
+            auto p = origin + pos + toy::diskRand(step * 0.5);
+            if (p.length2() < poolRadius2)
             {
                 continue;
             }
 
             ++count;
-            auto tp = getTerrainPoint(p.x(), p.y());
-            auto m = osg::Matrix::rotate(unitRand() * osg::PI_2f, osg::Z_AXIS);
-            m.postMultTranslate(tp);
-
-            auto frame = new osg::MatrixTransform;
-            frame->setMatrix(m);
-            frame->addChild(grass);
-
-            auto groupCol = numGroups * i / cols;
-            auto groupRow = numGroups * j / rows;
-            auto groupName =
-                "GrassGroup" + std::to_string(groupCol) + ":" + std::to_string(groupRow);
-            auto parentGroup = grassGroups[groupName];
-
-            parentGroup->addChild(frame);
-            // OSG_DEBUG << "add grass " << i << ":" << j << " to group " << groupName
-            //            << std::endl;
+            vertices->push_back(getTerrainPoint(p.x(), p.y()));
         }
     }
+
+    geometry->setVertexArray(vertices);
+    geometry->addPrimitiveSet(new osg::DrawArrays(GL_POINTS, 0, vertices->size()));
+    geometry->setDataVariance(osg::Object::DYNAMIC);
+    geometry->setUseDisplayList(false);
+    geometry->setUseVertexArrayObject(false);
+
+    // sort by depth
+    auto sortByDepth = osgf::createCallback([](osg::Object* obj, osg::Object* data) {
+        auto cv = data->asNodeVisitor()->asCullVisitor();
+        if (cv->getCurrentCamera() != sgg.getMainCamera())
+        {
+            return;
+        }
+
+        auto lookVector = cv->getLookVectorLocal();
+        auto eyeLocal = cv->getEyeLocal();
+
+        auto geom = obj->asNode()->asGeometry();
+        auto vertices = static_cast<osg::Vec3Array*>(geom->getVertexArray());
+
+        std::sort(vertices->begin(), vertices->end(),
+            [&](const osg::Vec3& v0, const osg::Vec3& v1) -> bool {
+                return (v0 - eyeLocal) * lookVector > (v1 - eyeLocal) * lookVector;
+            });
+
+        vertices->dirty();
+        // no dirty bound and gl object
+    });
+    geometry->addCullCallback(sortByDepth);
+
+    root->addChild(geometry);
+
     OSG_NOTICE << "Create " << count << " grasses" << std::endl;
 
     auto ss = root->getOrCreateStateSet();
@@ -1134,19 +1101,26 @@ void Game::createMeadow()
     ss->setAttributeAndModes(
         new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
 
-    auto prg = createProgram("shader/grass.vert", "shader/grass.frag");
+    auto prg = createProgram("shader/grass.vert", "shader/grass.geom", "shader/grass.frag",
+            GL_POINTS, GL_TRIANGLE_STRIP, 18);
     ss->setAttributeAndModes(prg);
 
+    ss->addUniform(new osg::Uniform("size", grassSize));
     ss->addUniform(new osg::Uniform("viewMatrix", osg::Matrixf()));
     ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
-    auto uf = ss->getUniform("explosions");
+    auto maxExplosions = sgc.getInt("meadow.maxExplosions");
+    auto maxSwayDistance = sgc.getInt("meadow.grass.maxSwayDistance");
+    ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
+    ss->setDefine("MAX_SWAY_DISTANCE", std::to_string(maxSwayDistance));
 
+    _explosions.assign(maxExplosions, osg::Vec4());
     // update explosion uniform.
     // This cull callback is called by both main camera and reflectRttCamera, it only update
     // uniform for main camera, which means you won't see grass animation in the pool, this
     // shouldn't matter, as you can only see only a few of grasses anyway. If you really
     // want grass animation, you must create a new node with a new stateset to pass
     // explosion uniform.
+    auto uf = ss->getUniform("explosions");
     root->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
         if (visitor->getCurrentCamera() == getMainCamera())
@@ -1163,78 +1137,6 @@ void Game::createMeadow()
     }));
 
     _sceneRoot->addChild(root);
-}
-
-void Game::createOverallMeadow()
-{
-    auto geometry = new osg::Geometry;
-    auto vertices = new osg::Vec3Array(osg::Array::BIND_PER_VERTEX);
-    auto texcoords = new osg::Vec2Array(osg::Array::BIND_PER_VERTEX);
-    auto normals = new osg::Vec3Array(osg::Array::BIND_OVERALL);
-    normals->push_back(osg::Z_AXIS);
-
-    auto points = poissonDiskSample(osg::Vec2(-_sceneRadius, -_sceneRadius),
-        osg::Vec2(_sceneRadius, _sceneRadius), 16, 32);
-
-    vertices->reserve(points.size() * 6 * 4);
-    texcoords->reserve(vertices->capacity());
-
-    auto grassSize = sgc.getFloat("meadow.grass.size");
-    auto offsetValue = sgc.getFloat("meadow.grass.maxOffset");
-    auto maxOffset = osg::Vec2(offsetValue, offsetValue);
-    auto hsize = grassSize * 0.5;
-
-    for (auto& p: points)
-    {
-        auto xy = p + linearRand(-maxOffset, maxOffset) * grassSize;
-        auto pos = getTerrainPoint(xy.x(), xy.y());
-        auto startAngle = unitRand() * osg::PI_2f;
-
-        // create * billboards
-        for (auto j = 0; j < 3; ++j)
-        {
-            auto angle = startAngle + osg::PI * j / 3;
-
-            auto p0 = pos + osg::Vec3(-cos(angle) * hsize, -sin(angle) * hsize, 0);
-            auto p1 = pos + osg::Vec3(cos(angle) * hsize, sin(angle) * hsize, 0);
-            auto p2 = p1 + osg::Z_AXIS * grassSize;
-            auto p3 = p0 + osg::Z_AXIS * grassSize;
-
-            vertices->push_back(p0);
-            vertices->push_back(p1);
-            vertices->push_back(p2);
-
-            vertices->push_back(p0);
-            vertices->push_back(p2);
-            vertices->push_back(p3);
-
-            texcoords->push_back(osg::Vec2(0, 0));
-            texcoords->push_back(osg::Vec2(1, 0));
-            texcoords->push_back(osg::Vec2(1, 1));
-
-            texcoords->push_back(osg::Vec2(0, 0));
-            texcoords->push_back(osg::Vec2(1, 1));
-            texcoords->push_back(osg::Vec2(0, 1));
-        }
-    }
-
-    geometry->setVertexArray(vertices);
-    geometry->setTexCoordArray(0, texcoords);
-    geometry->setNormalArray(normals);
-    geometry->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLES, 0, vertices->size()));
-
-    auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
-    texture->setResizeNonPowerOfTwoHint(false);
-    texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR_MIPMAP_LINEAR);
-    texture->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
-
-    osg::StateSet* ss = geometry->getOrCreateStateSet();
-    ss->setTextureAttributeAndModes(0, texture);
-    ss->setAttributeAndModes(new osg::AlphaFunc(osg::AlphaFunc::GREATER, 0));
-    ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    // ss->setMode(GL_BLEND, osg::StateAttribute::ON);
-
-    _sceneRoot->addChild(geometry);
 }
 
 void Game::createBurrows()
@@ -1257,7 +1159,7 @@ void Game::createBurrows()
         auto normal = getTerrainNormal(p.x(), p.y());
         normal.normalize();
         auto burrow = createBurrow(point, normal);
-        _sceneRoot->addChild(burrow.node);
+        // _sceneRoot->addChild(burrow.node);
         _burrowList.push_back(burrow);
     }
 }

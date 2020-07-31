@@ -170,8 +170,6 @@ private:
 
     void createMeadow();
 
-    void createOverallMeadow();
-
     void createBurrows();
 
     Burrow createBurrow(const osg::Vec3& pos, const osg::Vec3& normal);
