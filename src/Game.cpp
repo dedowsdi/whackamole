@@ -909,6 +909,7 @@ void Game::createPool()
     ss->addUniform(new osg::Uniform("normal_map", 4));
 
     auto material = new osg::Material;
+    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.75, 1, 1, 1));
     material->setSpecular(osg::Material::FRONT_AND_BACK, osg::Vec4(0.6, 0.6, 0.6, 1));
     material->setShininess(osg::Material::FRONT_AND_BACK, 50);
     ss->setAttributeAndModes(material);

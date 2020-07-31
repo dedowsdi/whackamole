@@ -42,8 +42,8 @@ void main(void)
 
     // animate distortion, edge distortion should torward 0
     float animStep = osg_SimulationTime * 0.02;
-    vec2 distort_st = texture2D(dudv_map, vec2(st.x + animStep, st.y)).xy * 0.1;
-    distort_st += vec2(distort_st.x, distort_st.y + animStep);
+    vec2 distort_st = texture2D(dudv_map, vec2(st.x + animStep, st.y)).xy * 0.06;
+    distort_st = st + vec2(distort_st.x, distort_st.y + animStep);
     vec2 distortion = (texture2D(dudv_map, distort_st) * 2 - 1).xy * wave_strength *
                       pow(clamp(pool_depth / 10, 0, 1), 5);
 
@@ -56,7 +56,7 @@ void main(void)
     vec3 n = normalize(gl_NormalMatrix * vec3(0, 0, 1));
     vec3 v = normalize(-vertex);
     float fresnel = clamp(dot(n, v), 0.15, 0.85);
-    vec4 color = mix(reflect_color, refract_color, pow(fresnel, 2));
+    vec4 color = clamp(mix(reflect_color, refract_color, pow(fresnel, 2)), 0, 1);
 
     // specular, use normal map normal
     vec3 l = normalize(gl_LightSource[1].position.xyz);
@@ -66,13 +66,15 @@ void main(void)
     float ndotl = dot(l, detail_normal);
     if (ndotl > 0)
     {
-        // color += ndotl * gl_FrontMaterial.diffuse;
         // specular
         vec3 h = normalize(l + v);
         float ndoth = clamp(dot(detail_normal, h), 0, 1);
         color += pow(ndoth, gl_FrontMaterial.shininess) * gl_FrontMaterial.specular *
                  gl_LightSource[1].specular * pow(clamp(pool_depth / 10, 0, 1), 2);
     }
+
+    // give it some water color
+    color *= vec4(0.5, 1, 1, 1);
 
     // alpha blend edge
     color.a = pow(clamp(pool_depth / 16, 0, 1), 1);
