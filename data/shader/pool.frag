@@ -55,7 +55,7 @@ void main(void)
     // fresnel effect, use fixed normal
     vec3 n = normalize(gl_NormalMatrix * vec3(0, 0, 1));
     vec3 v = normalize(-vertex);
-    float fresnel = clamp(dot(n, v), 0.15, 0.85);
+    float fresnel = clamp(dot(n, v), 0.2, 0.8);
     vec4 color = clamp(mix(reflect_color, refract_color, pow(fresnel, 2)), 0, 1);
 
     // specular, use normal map normal

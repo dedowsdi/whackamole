@@ -85,6 +85,7 @@ enum node_bit
     nb_terrain = nb_above_waterline | nb_below_waterline | nb_raytest,
     nb_real_object = nb_above_waterline | nb_raytest,
     nb_unreal_object = nb_above_waterline,
+    nb_fish = nb_below_waterline
 };
 
 #define sgg ::toy::Game::instance()
@@ -206,6 +207,8 @@ private:
 
     osg::ref_ptr<Mole> _cursorMole;
 
+    osg::ref_ptr<osg::Node> _fish;
+
     osg::ref_ptr<osg::MatrixTransform> _cursorFrame;
     osg::ref_ptr<osg::Geometry> _cursorGeom;
     osg::ref_ptr<osg::Program> _cursorProgram;
@@ -226,6 +229,7 @@ private:
     osg::ref_ptr<osg::Camera> _refractRttCamera;
 
     osg::ref_ptr<osgGA::KeySwitchMatrixManipulator> _manipulator;
+    
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Burrow> _burrowList;

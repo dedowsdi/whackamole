@@ -787,6 +787,65 @@ void Game::createTerrain()
     _sceneRoot->addChild(_terrain);
 }
 
+class FishUpdater : public osg::Callback
+{
+public:
+
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        auto fish = static_cast<osg::MatrixTransform*>(object);
+        auto dt = sgg.getDeltaTime();
+        _time -= dt;
+        if (_time <= 0)
+        {
+            reset(*fish);
+        }
+        else
+        {
+            fish->setMatrix(fish->getMatrix() * osg::Matrix::translate(_vel * dt));
+        }
+        return traverse(object, data);
+    }
+private:
+
+    void reset(osg::MatrixTransform& fish)
+    {
+        auto radius = sgc.getFloat("pool.bottomRadius");
+        auto gauss = sgc.getVec2("fish.speed.gauss");
+
+        // reset velocity
+        auto pos = fish.getMatrix().getTrans();
+        auto targetPos = osg::Vec3(diskRand(radius), pos.z());
+        auto speed = clamp(gaussRand(gauss.x(), gauss.y()), 0.01f, 999.0f);
+        _vel = targetPos - pos;
+        auto distance = _vel.normalize();
+        _vel *= speed;
+        _time = distance / speed;
+
+        // reset rotation
+        auto frame = osg::Matrix::rotate(-osg::Y_AXIS, _vel);
+        frame.postMultTranslate(pos);
+        fish.setMatrix(frame);
+    }
+
+    float _time = 0;
+    osg::Vec3 _vel;
+};
+
+class PoolCreatureCullCallback : public osg::Callback
+{
+public:
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        auto visitor = data->asNodeVisitor()->asCullVisitor();
+        if (visitor->getCurrentCamera() == sgg.getMainCamera())
+        {
+            return false;
+        }
+        return traverse(object, data);
+    }
+};
+
 void Game::createPool()
 {
     auto radius = sgc.getFloat("pool.radius");
@@ -909,10 +968,41 @@ void Game::createPool()
     ss->addUniform(new osg::Uniform("normal_map", 4));
 
     auto material = new osg::Material;
-    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.75, 1, 1, 1));
     material->setSpecular(osg::Material::FRONT_AND_BACK, osg::Vec4(0.6, 0.6, 0.6, 1));
     material->setShininess(osg::Material::FRONT_AND_BACK, 50);
     ss->setAttributeAndModes(material);
+
+    // add some fishes
+    auto root = new osg::Group;
+    root->setNodeMask(nb_fish);
+    root->setCullCallback(new PoolCreatureCullCallback);
+    root->setName("PoolCreatures");
+    _sceneRoot->addChild(root);
+
+    // load model, scale it to certain size
+    auto model = osgDB::readNodeFile("model/fish.osgt");
+    auto size = sgc.getFloat("fish.size");
+    auto& bs = model->getBound();
+    auto scale = size / bs.radius();
+    auto frame = new osg::MatrixTransform;
+    frame->setMatrix(osg::Matrix::scale(osg::Vec3(scale, scale, scale)));
+    frame->addChild(model);
+    _fish = frame;
+
+    auto count = sgc.getInt("fish.count");
+    auto poolBottomRadius = sgc.getFloat("pool.bottomRadius");
+    auto poolDepth = sgc.getFloat("pool.depth");
+    for (auto i = 0; i < count; ++i)
+    {
+        auto pos = osg::Vec3(
+            diskRand(poolBottomRadius * 0.9), top - linearRand(5, poolDepth - 16));
+        auto fish = new osg::MatrixTransform;
+        fish->setName("Fish" + std::to_string(i));
+        fish->setMatrix(osg::Matrix::translate(pos));
+        fish->addChild(_fish);
+        fish->addUpdateCallback(new FishUpdater());
+        root->addChild(fish);
+    }
 }
 
 osg::Geometry* createGrass()
