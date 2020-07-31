@@ -1,14 +1,3 @@
-// Game
-//      click mole to whack
-//
-// UI
-//      score board
-//
-// Scene
-//      sky
-//      lawn
-//      burrows
-
 #include <osg/LightModel>
 #include <osgGA/StateSetManipulator>
 #include <osgGA/TrackballManipulator>
