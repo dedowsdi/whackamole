@@ -57,6 +57,13 @@ public:
 
     void addResource(const Resource& resource);
 
+    void addResource(osg::Shader* shader);
+
+    // observe all shaders in this prg, no further reference required, so it's &
+    void addResource(osg::Program& prg);
+
+    void clear();
+
 private:
     ResourceList _resources;
 };

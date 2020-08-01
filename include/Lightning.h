@@ -79,6 +79,8 @@ public:
     BoltList& getBolts() { return _bolts; }
     void setBolts(const BoltList& v) { _bolts = v; }
 
+    static osg::Program* getBillboardProgram() { return _billboardProgram; }
+
 private:
     std::vector<osg::Vec3> createLightning(const Bolt& bolt);
 

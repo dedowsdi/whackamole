@@ -151,4 +151,29 @@ void ResourceObserver::addResource(const Resource& resource)
     OSG_NOTICE << "Observing " << resource.getFile() << std::endl;
 }
 
+void ResourceObserver::addResource(osg::Shader* shader)
+{
+    addResource(createShaderResource(shader));
+}
+
+void ResourceObserver::addResource(osg::Program& prg)
+{
+    if (prg.getNumShaders() == 0)
+    {
+        OSG_WARN << "Nothing to observe, " << prg.getName() << " has 0 shaders"
+                 << std::endl;
+        return;
+    }
+
+    for (auto i = 0; i < prg.getNumShaders(); ++i)
+    {
+        addResource(prg.getShader(i));
+    }
+}
+
+void ResourceObserver::clear()
+{
+    _resources.clear();
+}
+
 }  // namespace toy

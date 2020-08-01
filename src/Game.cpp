@@ -48,6 +48,7 @@
 #include <OsgFactory.h>
 #include <OsgQuery.h>
 #include <Outline.h>
+#include <Resource.h>
 #include <ToyMath.h>
 
 namespace toy
@@ -569,7 +570,16 @@ void Game::updateScore(const osg::Vec3& pos, int score)
 
 void Game::restart()
 {
+    OSG_NOTICE << "Restart game" << std::endl;
     sgc.reload();
+
+    // clear resource observer, but leave static ones
+    _observer->clear();
+    auto lprg = Lightning::getBillboardProgram();
+    if (lprg)
+    {
+        _observer->addResource(*lprg);
+    }
 
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
     _sceneRoot->setUpdateCallback(0);
