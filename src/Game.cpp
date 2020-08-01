@@ -1303,6 +1303,7 @@ osg::Node* Game::createUI()
     {
         _timerBar = osg::createTexturedQuadGeometry(
             osg::Vec3(), osg::Vec3(1, 0, 0), osg::Vec3(0, 1, 0));
+        _timerBar->setName("TimerBar");
 
         auto ss = _timerBar->getOrCreateStateSet();
 
@@ -1467,6 +1468,7 @@ void Game::createStarfield()
     // add stars
     {
         auto stars = new osg::Geometry;
+        stars->setName("Star");
         auto vertices = new osg::Vec4Array(osg::Array::BIND_PER_VERTEX);
         auto numStars = sgc.getInt("scene.numStars");
         vertices->reserve(numStars);

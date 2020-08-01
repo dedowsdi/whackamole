@@ -4,6 +4,7 @@
 #include <iterator>
 
 #include <osgViewer/Viewer>
+#include <osg/Program>
 #include <OsgQuery.h>
 
 namespace toy
@@ -139,22 +140,25 @@ void RenderStagePrinter::printRenderBin(const osgUtil::RenderBin* bin)
         _out << "--------\n";
         _out << "fine grained :\n";
 
-        const osgUtil::StateGraph* previous = 0;
+        const osgUtil::StateGraph* previousStateGrouph = 0;
+        const osg::StateSet* previousStateSet = 0;
 
         for (auto leaf: fineGrained)
         {
-            if (previous != leaf->_parent)
+            if (previousStateGrouph != leaf->_parent)
             {
                 // fine grained renderleaf is sorted back to front, it's not grouped by
                 // StateGraph.
                 _out << "StateGraph : " << leaf->_parent << "\n";
-                printStateset(leaf->_parent->getStateSet());
-                previous = leaf->_parent;
+                auto ss = leaf->_parent->getStateSet();
+                if (ss != previousStateSet)
+                {
+                    printStateset(ss);
+                }
+                previousStateGrouph = leaf->_parent;
+                previousStateSet = ss;
             }
-            auto drawable = leaf->getDrawable();
-            _out << "    " << drawable << " \"" << drawable->getName() << "\" "
-                 << (leaf->_dynamic ? "DYNAMIC" : "STATIC") << " "
-                 << drawable->getDisplayList(_renderInfo->getContextID()) << "\n";
+            printLeaf(leaf);
         }
     }
 
@@ -167,10 +171,7 @@ void RenderStagePrinter::printRenderBin(const osgUtil::RenderBin* bin)
             printStateset(graph->getStateSet());
             for (auto leaf: graph->_leaves)
             {
-                auto drawable = leaf->getDrawable();
-                _out << "    " << drawable << " \"" << drawable->getName() << "\" "
-                     << (leaf->_dynamic ? "DYNAMIC" : "STATIC") << " "
-                     << drawable->getDisplayList(_renderInfo->getContextID()) << "\n";
+                printLeaf(leaf);
             }
         }
     }
@@ -512,7 +513,16 @@ void RenderStagePrinter::printStateset(const osg::StateSet* ss)
         auto type = iter->first.first;
         auto member = iter->first.second;
         auto overrideValue = iter->second.second;
-        _out << stateAttributeTypeToString(type) << "[" << member << "] " << overrideValue;
+        _out << stateAttributeTypeToString(type) << "[" << member << "] " << std::hex
+             << overrideValue << std::dec;
+
+        if (type == osg::StateAttribute::PROGRAM)
+        {
+            auto prg = static_cast<const osg::Program*>(iter->second.first.get());
+            // this will change State define str, it should not matter.
+            auto pcp = prg->getPCP(const_cast<osg::State&>(*_renderInfo->getState()));
+            _out << " {" << pcp->getHandle() << "}" << std::endl;
+        }
 
         if (++i % 4 == 0 || iter == --al.end())
         {
@@ -521,6 +531,46 @@ void RenderStagePrinter::printStateset(const osg::StateSet* ss)
         else
         {
             _out << " | ";
+        }
+    }
+}
+
+void RenderStagePrinter::printLeaf(const osgUtil::RenderLeaf* leaf)
+{
+    auto drawable = leaf->getDrawable();
+    _out << "    " << drawable << " \"" << drawable->getName() << "\" "
+         << (leaf->_dynamic ? "DYNAMIC" : "STATIC");
+
+    auto& state = *_renderInfo->getState();
+
+    // display list
+#    ifdef OSG_GL_DISPLAYLISTS_AVAILABLE
+    if (drawable->getUseDisplayList() &&
+        !(state.useVertexBufferObject(drawable->getUseVertexBufferObjects())))
+    {
+        _out << " dl{" << drawable->getDisplayList(_renderInfo->getContextID()) << "}\n";
+    }
+#    endif /* ifndef  */
+
+    // vao
+    if (state.useVertexArrayObject(drawable->getUseVertexArrayObject()))
+    {
+        _out << " vao{"
+             << drawable->getVertexArrayStateList()[_renderInfo->getContextID()]
+                    ->getVertexArrayObject()
+             << "}";
+    }
+
+    // vbo
+    if (state.useVertexBufferObject(drawable->getUseVertexBufferObjects()))
+    {
+        auto geom = dynamic_cast<const osg::Geometry*>(drawable);
+        if (geom)
+        {
+            // might create vertex buffer object, should not matter
+            auto vbo = const_cast<osg::Geometry*>(geom)->getOrCreateVertexBufferObject();
+            _out << " vbo{" << vbo->getGLBufferObject(_renderInfo->getContextID()) << "}"
+                 << std::endl;
         }
     }
 }

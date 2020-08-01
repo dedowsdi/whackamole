@@ -53,6 +53,8 @@ private:
 
     void printStateset(const osg::StateSet* ss);
 
+    void printLeaf(const osgUtil::RenderLeaf* drawable);
+
     mutable bool _enabled = false;
     std::ostream& _out;
     const osg::RenderInfo* _renderInfo = 0;
