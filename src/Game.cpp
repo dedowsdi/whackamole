@@ -329,12 +329,6 @@ bool Game::run(osg::Object* object, osg::Object* data)
 
     if (_status == gs_running && _deltaTime > 0)
     {
-        auto newMole = toy::unitRand() < _popRate;
-        if (newMole)
-        {
-            popMole();
-        }
-
         _timer -= _deltaTime;
         std::stringstream ss;
         ss << std::setprecision(2) << std::fixed << std::showpoint << _timer;
@@ -1218,6 +1212,27 @@ void Game::createMeadow()
     _sceneRoot->addChild(root);
 }
 
+class MoleSpawner : public osg::Callback
+{
+public:
+    MoleSpawner(const osg::Vec2& gaussRate) : _gaussRate(gaussRate) {}
+
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        _time -= sgg.getDeltaTime();
+        if (_time <= 0)
+        {
+            _time = gaussRand(_gaussRate.x(), _gaussRate.y(), 0.001f, 2.0f);
+            sgg.popMole();
+        }
+        return traverse(object, data);
+    }
+
+private:
+    double _time = 0.2;
+    osg::Vec2 _gaussRate;
+};
+
 void Game::createBurrows()
 {
     _burrowList.clear();
@@ -1243,6 +1258,9 @@ void Game::createBurrows()
         // _sceneRoot->addChild(burrow.node);
         _burrowList.push_back(burrow);
     }
+
+    auto rate = sgc.getVec2("mole.spawn.rate.gauss");
+    _sceneRoot->addUpdateCallback(new MoleSpawner(rate));
 }
 
 void Game::createLights()
@@ -1453,7 +1471,7 @@ osg::Node* Game::createUI()
 
 void Game::createStarfield()
 {
-    // stars and moon are far far away, they don't conribute to depth buffer, they use
+    // starfield is far far away, they don't conribute to depth buffer, they use
     // LEQUAL depth compare func. These drawables has a invalid BoundingBox, it's used to
     // supress near far calculation. It also need a Projection node since they don't
     // contribute to near far.
@@ -1531,6 +1549,11 @@ void Game::createStarfield()
         ss->setAttributeAndModes(createProgram("shader/star.vert", "shader/star.frag"));
 
         projNode->addChild(stars);
+    }
+
+    // add meteor
+    {
+
     }
 
     _sceneRoot->addChild(root);
