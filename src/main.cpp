@@ -55,7 +55,5 @@ int main(int argc, char* argv[])
     statesetHandler->setKeyEventCyclePolygonMode('0');
 
     viewer.addEventHandler(statesetHandler);
-    viewer.run();
-
-    return 0;
+    return viewer.run();
 }

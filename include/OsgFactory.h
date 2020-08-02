@@ -144,6 +144,9 @@ osg::MatrixTransform* createBox(
 // Bake transform into geometry.
 void bakeTransform(osg::Node& node);
 
+osg::Node* readNodeFile(
+    const std::string& name, float desiredRadius, bool shiftToCenter = true);
+
 // You have stacks+1 rows of vertices, each row has slices+1 cols, this function
 // create triangle strip elements as adbecf... or daebfc... if reversed:
 //  a b c ...

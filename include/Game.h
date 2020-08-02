@@ -36,7 +36,7 @@ struct Burrow
 {
     bool active = false;
     osg::Vec3 normal = osg::Vec3(0, 0, 1);
-    osg::MatrixTransform* node;
+    osg::MatrixTransform* node = 0;
 
     osg::Vec3 getTopCenter();
 };
@@ -193,6 +193,10 @@ private:
 
     ~Game();
 
+    void clear();
+
+    void resetUI();
+
     void createTerrain();
 
     void createPool();
@@ -200,6 +204,10 @@ private:
     void createMeadow();
 
     void createBurrows();
+
+    void createLights();
+
+    void setupCameraAndManipulator();
 
     Burrow createBurrow(const osg::Vec3& pos, const osg::Vec3& normal);
 

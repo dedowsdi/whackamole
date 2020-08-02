@@ -69,19 +69,19 @@ Wind::Wind()
 void Wind::update(double dt)
 {
     _time -= dt;
-    if(_time < 0)
+    if (_time < 0)
     {
         mutate();
     }
     else if (_time >= _duration * 0.8)
     {
         // fade in
-        _strength = mix(0.0f, _amplitude, (_duration - _time) / (_duration * 0.2f) );
+        _strength = mix(0.0f, _amplitude, (_duration - _time) / (_duration * 0.2f));
     }
-    else if(_time <= _duration * 0.2 )
+    else if (_time <= _duration * 0.2)
     {
         // fade out
-        _strength = mix(0.0f, _amplitude, _time / (_duration * 0.2f) );
+        _strength = mix(0.0f, _amplitude, _time / (_duration * 0.2f));
     }
     else
     {
@@ -116,8 +116,10 @@ void Wind::mutate()
     _amplitude = clamp(gaussRand(sgc.getVec2("wind.amplitude.gauss")), 0.01f, 999.f);
     _exponent = clamp(gaussRand(sgc.getVec2("wind.exponent.gauss")), 0.0f, 999.f);
     _speed = clamp(gaussRand(sgc.getVec2("wind.speed.gauss")), 0.0f, 999.f);
-    _length = clamp(gaussRand(sgc.getVec2("wind.length.gauss")), 0.0f, 99999.f);;
-    _duration = clamp(gaussRand(sgc.getVec2("wind.duration")), 0.0f, 99999.f);;
+    _length = clamp(gaussRand(sgc.getVec2("wind.length.gauss")), 0.0f, 99999.f);
+    ;
+    _duration = clamp(gaussRand(sgc.getVec2("wind.duration")), 0.0f, 99999.f);
+    ;
     _time = _duration;
     _direction = circularRand(1.0f);
     _strength = 0;
@@ -262,13 +264,6 @@ osg::Node* Mole::getModel()
 
         auto ss = frame->getOrCreateStateSet();
         ss->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON);
-
-        // ss->setAttributeAndModes(
-        //     new osg::CullFace, osg::StateAttribute::OFF |
-        //     osg::StateAttribute::PROTECTED);
-
-        // ss->setMode(
-        //     GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
 
         _model = frame;
     }
@@ -571,76 +566,36 @@ void Game::updateScore(const osg::Vec3& pos, int score)
 void Game::restart()
 {
     OSG_NOTICE << "Restart game" << std::endl;
+
     sgc.reload();
 
-    // clear resource observer, but leave static ones
-    _observer->clear();
-    auto lprg = Lightning::getBillboardProgram();
-    if (lprg)
-    {
-        _observer->addResource(*lprg);
-    }
+    clear();
 
-    _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
-    _sceneRoot->setUpdateCallback(0);
-    _removeMoleCallbacks.clear();
-    _root->removeChild(_reflectRttCamera);
-    _root->removeChild(_refractRttCamera);
+    resetUI();
 
-    auto lm = new osg::LightModel;
-    lm->setLocalViewer(true);
-    lm->setAmbientIntensity(sgc.getVec4("scene.ambient"));
-    _sceneRoot->getOrCreateStateSet()->setAttributeAndModes(lm);
-    _sceneRoot->getOrCreateStateSet()->setMode(GL_CULL_FACE, osg::StateAttribute::ON);
-    _sceneRoot->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
+    // start new game
+    _status = gs_running;
 
-    auto light = _viewer->getLight();
-    light->setDiffuse(sgc.getVec4("scene.headlight.diffuse"));
-    light->setSpecular(sgc.getVec4("scene.headlight.specular"));
-    light->setAmbient(sgc.getVec4("scene.headlight.ambient"));
-
+    // cache some frequently used settings
     _sceneRadius = sgc.getFloat("scene.radius");
     _sceneHeight = sgc.getFloat("scene.height");
     _popRate = sgc.getFloat("mole.popRate");
 
-    _score = 0;
-    _scoreText->setText("0");
-
-    auto camera = getMainCamera();
-    camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
+    createLights();
 
     createStarfield();
+
     createTerrain();
+
     createPool();
+
     createMeadow();
 
-    _burrowList.clear();
     createBurrows();
 
-    hide(_msg);
-    _timer = 60;
-    _totalTime = 60;
-    _timerText->setText(std::to_string(_timer));
+    setupCameraAndManipulator();
 
-    _scoreText->setNodeMask(nb_ui);
-    _timerText->setNodeMask(nb_ui);
-    _timerBar->setNodeMask(nb_ui);
-
-    _status = gs_running;
-
-    auto kcm =
-        static_cast<osgGA::KeySwitchMatrixManipulator*>(_viewer->getCameraManipulator());
-    kcm->selectMatrixManipulator(1);
-    auto manipulator = static_cast<GhostManipulator*>(kcm->getCurrentMatrixManipulator());
-    manipulator->setWalkSpeed(sgc.getFloat("camera.walkSpeed"));
-    manipulator->setCameraHeight(sgc.getFloat("camera.height"));
-
-    auto xy = sgc.getVec2("camera.startXY");
-    auto tp = getTerrainPoint(xy.x(), xy.y());
-    tp.z() += sgc.getFloat("camera.height");
-    manipulator->setHomePosition(tp, osg::Vec3(), osg::Z_AXIS);
-    _viewer->home();
-
+    // force a resize in the end
     auto wsize = osgq::getWindowRect(*_viewer);
     resize(wsize.z(), wsize.w());
 }
@@ -672,7 +627,6 @@ void Game::resize(int width, int height)
     auto y = sgc.getFloat("ui.bar.y");
     auto x = (width - barSize.x()) * 0.5f;
 
-    // resize time bar
     auto vertices = static_cast<osg::Vec3Array*>(_timerBar->getVertexArray());
     auto corner = osg::Vec3(x, y, 0);
     auto widthVec = osg::Vec3(barSize.x(), 0, 0);
@@ -779,8 +733,47 @@ Game::Game() {}
 
 Game::~Game() {}
 
+void Game::clear()
+{
+    // clear resource observer, but leave static ones
+    _observer->clear();
+    auto lprg = Lightning::getBillboardProgram();
+    if (lprg)
+    {
+        _observer->addResource(*lprg);
+    }
+
+    _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
+    _sceneRoot->setUpdateCallback(0);
+    _sceneRoot->setCullCallback(0);
+    _sceneRoot->setEventCallback(0);
+
+    _removeMoleCallbacks.clear();
+
+    _root->removeChild(_reflectRttCamera);
+    _root->removeChild(_refractRttCamera);
+}
+
+void Game::resetUI()
+{
+    _score = 0;
+    _scoreText->setText("0");
+
+    hide(_msg);
+    _timer = 60;
+    _totalTime = 60;
+    _timerText->setText(std::to_string(_timer));
+
+    _scoreText->setNodeMask(nb_ui);
+    _timerText->setNodeMask(nb_ui);
+    _timerBar->setNodeMask(nb_ui);
+}
+
 void Game::createTerrain()
 {
+    // Perlin noised generated height field terrain. A hole will be digged in center as
+    // pool.
+
     _heightField = new osg::HeightField;
 
     // make sure no scale happens between heightfiled and heightfield layer, otherwise
@@ -800,22 +793,23 @@ void Game::createTerrain()
 
     auto yStep = 0.03;
     auto xStep = 0.03;
-    auto noiseFactor = osg::Vec2(linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f));
 
+    // Perlin noise used fixed seed 30757, we random the start coordinates to random the
+    // terrain.
+    auto coord = osg::Vec2(linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f));
     auto poolRadius = sgc.getFloat("pool.radius");
     auto poolBottomRadius = sgc.getFloat("pool.bottomRadius");
     auto poolDepth = sgc.getFloat("pool.depth");
 
     for (int y = 0; y < rows; ++y)
     {
-        noiseFactor[1] += yStep;
-        noiseFactor[0] = 0;
+        coord[1] += yStep;
+        coord[0] = 0;
 
         for (int x = 0; x < cols; ++x)
         {
-            noiseFactor[0] += xStep;
-            auto h =
-                pn.PerlinNoise2D(noiseFactor[0], noiseFactor[1], 2, 2, 3) * _sceneHeight;
+            coord[0] += xStep;
+            auto h = pn.PerlinNoise2D(coord[0], coord[1], 2, 2, 3) * _sceneHeight;
 
             // dig pool
             auto vertex = _heightField->getVertex(x, y);
@@ -838,13 +832,14 @@ void Game::createTerrain()
     auto layer = new osgTerrain::HeightFieldLayer(_heightField);
     layer->setLocator(locator);
 
-    auto clayer = new osgTerrain::ImageLayer(osgDB::readImageFile("texture/ground.jpg"));
+    auto colorLayer =
+        new osgTerrain::ImageLayer(osgDB::readImageFile("texture/ground.jpg"));
 
     auto tile = new osgTerrain::TerrainTile;
     tile->setTerrainTechnique(new osgTerrain::GeometryTechnique);
     tile->setTileID(osgTerrain::TileID(0, 0, 0));
     tile->setElevationLayer(layer);
-    tile->setColorLayer(0, clayer);
+    tile->setColorLayer(0, colorLayer);
 
     _terrain = new osgTerrain::Terrain;
     _terrain->setNodeMask(nb_terrain);
@@ -855,6 +850,7 @@ void Game::createTerrain()
 
     auto material = new osg::Material;
     material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.75, 0.75, 0.75, 1));
+
     ss->setAttributeAndModes(material);
 
     _sceneRoot->addChild(_terrain);
@@ -920,6 +916,11 @@ public:
 
 void Game::createPool()
 {
+    // Pool is a rect textured with reflect texture and refract texture. Global clip plane 0
+    // is used to clip above pool, Global clip plane 1 is ued to clip below pool This pool
+    // is adapted from
+    // https://www.youtube.com/watch?v=HusvGeEDU_U&list=PLRIWtICgwaX23jiqVByUs0bqhnalNTNZh&index=1
+
     auto radius = sgc.getFloat("pool.radius");
     auto top = sgc.getFloat("pool.top");
 
@@ -934,40 +935,39 @@ void Game::createPool()
         _reflectRttCamera->setName("ReflectRttCamera");
         _reflectRttCamera->setNodeMask(nb_above_waterline);
         _reflectRttCamera->attach(osg::Camera::COLOR_BUFFER, _reflectMap);
+
+        // require stencil for outline
         _reflectRttCamera->attach(
             osg::Camera::PACKED_DEPTH_STENCIL_BUFFER, GL_DEPTH_STENCIL_EXT);
         _reflectRttCamera->setCullMask(nb_above_waterline);
         _reflectRttCamera->setClearMask(
             GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-        _reflectRttCamera->setCullingMode(_reflectRttCamera->getCullingMode() &
-                                          ~osg::CullSettings::SMALL_FEATURE_CULLING);
         _reflectRttCamera->setUpdateCallback(osgf::getPruneCallback());
         _reflectRttCamera->setEventCallback(osgf::getPruneCallback());
         _root->addChild(_reflectRttCamera);
 
-        auto frame = new osg::MatrixTransform;
+        // flip scene by pool plane
         auto m = osg::Matrix::translate(osg::Vec3(0, 0, top));
         m.preMultScale(osg::Vec3(1, 1, -1));
         m.preMultTranslate(osg::Vec3(0, 0, -top));
-        frame->setMatrix(m);
+        _reflectRttCamera->setViewMatrix(m);
 
-        _reflectRttCamera->addChild(frame);
-
+        // clip above pool
         auto clipNode = new osg::ClipNode;
         auto clipPlane = new osg::ClipPlane;
         clipPlane->setClipPlaneNum(0);
         clipPlane->setClipPlane(0, 0, 1, -top);
         clipNode->addClipPlane(clipPlane);
 
-        frame->addChild(clipNode);
+        _reflectRttCamera->addChild(clipNode);
 
-        auto ss = frame->getOrCreateStateSet();
+        auto ss = _reflectRttCamera->getOrCreateStateSet();
         ss->setMode(
             GL_CLIP_PLANE0, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
         ss->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT),
             osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
 
-        frame->addChild(_sceneRoot);
+        _reflectRttCamera->addChild(_sceneRoot);
     }
 
     // refract{
@@ -985,6 +985,9 @@ void Game::createPool()
         _refractRttCamera->setNodeMask(nb_below_waterline);
         _refractRttCamera->setName("RefractRttCamera");
         _refractRttCamera->attach(osg::Camera::COLOR_BUFFER, _refractMap);
+
+        // depth map is used to calculate pool depth in frag shader(pool bottom to pool top,
+        // in camera -z direction)
         _refractRttCamera->attach(osg::Camera::DEPTH_BUFFER, _depthMap);
         _refractRttCamera->setCullMask(nb_below_waterline);
         _refractRttCamera->setClearMask(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -992,6 +995,7 @@ void Game::createPool()
         _refractRttCamera->setEventCallback(osgf::getPruneCallback());
         _root->addChild(_refractRttCamera);
 
+        // clip below pool
         auto clipNode = new osg::ClipNode;
         auto clipPlane = new osg::ClipPlane;
         clipPlane->setClipPlaneNum(1);
@@ -1007,7 +1011,7 @@ void Game::createPool()
         _refractRttCamera->addChild(_sceneRoot);
     }
 
-    // pool
+    // add pool. The pool it self should only be rended by main camera.
     _pool = osg::createTexturedQuadGeometry(osg::Vec3(-radius, -radius, top),
         osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
     _pool->setName("Pool");
@@ -1017,6 +1021,8 @@ void Game::createPool()
 
     auto ss = _pool->getOrCreateStateSet();
     ss->setAttributeAndModes(createProgram("shader/pool.vert", "shader/pool.frag"));
+
+    // alpha blend is used to soft edge
     ss->setAttributeAndModes(
         new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
     ss->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
@@ -1045,22 +1051,14 @@ void Game::createPool()
     material->setShininess(osg::Material::FRONT_AND_BACK, 50);
     ss->setAttributeAndModes(material);
 
-    // add some fishes
+    // add some swimming fishes
     auto root = new osg::Group;
     root->setNodeMask(nb_fish);
     root->setCullCallback(new PoolCreatureCullCallback);
     root->setName("PoolCreatures");
     _sceneRoot->addChild(root);
 
-    // load model, scale it to certain size
-    auto model = osgDB::readNodeFile("model/fish.osgt");
-    auto size = sgc.getFloat("fish.size");
-    auto& bs = model->getBound();
-    auto scale = size / bs.radius();
-    auto frame = new osg::MatrixTransform;
-    frame->setMatrix(osg::Matrix::scale(osg::Vec3(scale, scale, scale)));
-    frame->addChild(model);
-    _fish = frame;
+    _fish = osgf::readNodeFile("model/fish.osgt", sgc.getFloat("fish.size"));
 
     auto count = sgc.getInt("fish.count");
     auto poolBottomRadius = sgc.getFloat("pool.bottomRadius");
@@ -1080,6 +1078,14 @@ void Game::createPool()
 
 void Game::createMeadow()
 {
+    // We only store grass position here, real grass is generate as * is geom shader. The
+    // grasses will be sorted in cull callback.
+    //
+    // This grass is adapted from
+    // https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-7-rendering-countless-blades-waving-grass
+    // Grass animation is adapted from
+    // https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-1-effective-water-simulation-physical-models
+
     auto root = new osg::Group;
     root->setName("Meadow");
     root->setNodeMask(nb_unreal_object);
@@ -1087,7 +1093,6 @@ void Game::createMeadow()
     auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
     auto grassSize = sgc.getFloat("meadow.grass.size");
     auto step = sgc.getFloat("meadow.grass.step") * grassSize;
-    auto numGroups = sgc.getInt("meadow.numGroupsPerRow");
 
     // create grasses
     int cols = _sceneRadius * 2 / step;
@@ -1095,8 +1100,6 @@ void Game::createMeadow()
 
     auto poolRadius = sgc.getFloat("pool.radius");
     auto poolRadius2 = poolRadius * poolRadius;
-    auto pos = osg::Vec2();
-    auto count = 0;
 
     auto geometry = new osg::Geometry;
     geometry->setName("Grass");
@@ -1104,10 +1107,12 @@ void Game::createMeadow()
     auto vertices = new osg::Vec3Array();
     vertices->reserve(cols * rows);
 
-    auto hsize = grassSize * 0.5;
+    auto pos = osg::Vec2();
+    auto count = 0;
 
     for (auto i = 1; i < cols - 1; ++i)
     {
+        // shift odd col a little bit.
         pos.y() = i % 2 ? 0 : 0.5 * step;
         pos.x() += step;
 
@@ -1132,7 +1137,7 @@ void Game::createMeadow()
     geometry->setUseDisplayList(false);
     geometry->setUseVertexArrayObject(false);
 
-    // sort by depth
+    // sort by depth, only done for main camera.
     auto sortByDepth = osgf::createCallback([](osg::Object* obj, osg::Object* data) {
         auto cv = data->asNodeVisitor()->asCullVisitor();
         if (cv->getCurrentCamera() != sgg.getMainCamera())
@@ -1179,21 +1184,16 @@ void Game::createMeadow()
         GL_POINTS, GL_TRIANGLE_STRIP, 18);
     ss->setAttributeAndModes(prg);
 
-    ss->addUniform(new osg::Uniform("size", grassSize));
-    ss->addUniform(new osg::Uniform("viewMatrix", osg::Matrixf()));
-    ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", 16));
     auto maxExplosions = sgc.getInt("meadow.maxExplosions");
     auto explosionRadius = sgc.getInt("lightning.explosionRadius");
+    ss->addUniform(new osg::Uniform("size", grassSize));
+    ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", maxExplosions));
     ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
     ss->setDefine("EXPLOSION_RADIUS", std::to_string(explosionRadius));
 
     _explosions.assign(maxExplosions, osg::Vec4());
-    // update explosion uniform.
-    // This cull callback is called by both main camera and reflectRttCamera, it only update
-    // uniform for main camera, which means you won't see grass animation in the pool, this
-    // shouldn't matter, as you can only see only a few of grasses anyway. If you really
-    // want grass animation, you must create a new node with a new stateset to pass
-    // explosion uniform.
+
+    // update explosions only for main camera cull traversal
     auto explosionUniform = ss->getUniform("explosions");
     root->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
@@ -1220,11 +1220,13 @@ void Game::createMeadow()
 
 void Game::createBurrows()
 {
+    _burrowList.clear();
+
     auto burrowRadius = sgc.getFloat("burrow.radius");
     auto spawnRadius = sgc.getFloat("burrow.spawnRadius") * _sceneRadius;
-    auto spawnDistance = sgc.getFloat("burrow.spawnDistance");
+    auto spawnInterval = sgc.getFloat("burrow.spawnInterval");
     auto points = poissonDiskSample(osg::Vec2(-spawnRadius, -spawnRadius),
-        osg::Vec2(spawnRadius, spawnRadius), spawnDistance, 32);
+        osg::Vec2(spawnRadius, spawnRadius), spawnInterval, 32);
 
     auto poolRadius = sgc.getFloat("pool.radius");
     for (auto& p: points)
@@ -1241,6 +1243,58 @@ void Game::createBurrows()
         // _sceneRoot->addChild(burrow.node);
         _burrowList.push_back(burrow);
     }
+}
+
+void Game::createLights()
+{
+    // There are two lights in this game.
+    // 1. head light, LIGHT0
+    // 2. sky light, moon light, LIGHT1
+
+    auto lm = new osg::LightModel;
+    lm->setLocalViewer(true);
+    lm->setAmbientIntensity(sgc.getVec4("scene.ambient"));
+
+    auto ss = _sceneRoot->getOrCreateStateSet();
+    ss->setAttributeAndModes(lm);
+    ss->setMode(GL_CULL_FACE, osg::StateAttribute::ON);
+    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON);
+
+    auto light0 = _viewer->getLight();
+    light0->setDiffuse(sgc.getVec4("scene.headlight.diffuse"));
+    light0->setSpecular(sgc.getVec4("scene.headlight.specular"));
+    light0->setAmbient(sgc.getVec4("scene.headlight.ambient"));
+
+    auto moonPos = sgc.getVec3("starfield.moon.pos");
+    moonPos.normalize();
+    auto ls = new osg::LightSource;
+    auto light1 = ls->getLight();
+    light1->setLightNum(1);
+    light1->setPosition(osg::Vec4(moonPos, 0));
+    light1->setAmbient(sgc.getVec4("starfield.moon.ambient"));
+    light1->setSpecular(sgc.getVec4("starfield.moon.specular"));
+
+    _sceneRoot->addChild(ls);
+    ls->setStateSetModes(*ss, osg::StateAttribute::ON);
+}
+
+void Game::setupCameraAndManipulator()
+{
+    auto camera = getMainCamera();
+    camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
+
+    auto kcm =
+        static_cast<osgGA::KeySwitchMatrixManipulator*>(_viewer->getCameraManipulator());
+    kcm->selectMatrixManipulator(1);
+    auto manipulator = static_cast<GhostManipulator*>(kcm->getCurrentMatrixManipulator());
+    manipulator->setWalkSpeed(sgc.getFloat("camera.walkSpeed"));
+    manipulator->setCameraHeight(sgc.getFloat("camera.height"));
+
+    auto xy = sgc.getVec2("camera.startXY");
+    auto tp = getTerrainPoint(xy.x(), xy.y());
+    tp.z() += sgc.getFloat("camera.height");
+    manipulator->setHomePosition(tp, osg::Vec3(), osg::Z_AXIS);
+    _viewer->home();
 }
 
 Burrow Game::createBurrow(const osg::Vec3& pos, const osg::Vec3& normal)
@@ -1282,22 +1336,10 @@ osgText::Text* createText(
     return t;
 }
 
-class TimerBarUpdater : public osg::StateSet::Callback
-{
-public:
-    TimerBarUpdater(osg::Uniform* uniform) : _uniform(uniform) {}
-
-private:
-    void operator()(osg::StateSet*, osg::NodeVisitor*) override
-    {
-        _uniform->set(sgg.getPercentTime());
-    }
-    osg::Uniform* _uniform = 0;
-};
-
 osg::Node* Game::createUI()
 {
-    // Most thing will be resized in the end of this method
+    auto root = new osg::Group;
+    root->setName("UIRoot");
 
     // create timer text, bar
     {
@@ -1307,13 +1349,13 @@ osg::Node* Game::createUI()
 
         auto ss = _timerBar->getOrCreateStateSet();
 
-        auto prg = createProgram("shader/timer_bar.frag", osg::Shader::FRAGMENT);
-        ss->setAttributeAndModes(prg);
-
+        ss->setAttributeAndModes(
+            createProgram("shader/timer_bar.frag", osg::Shader::FRAGMENT));
         ss->addUniform(new osg::Uniform("size", osg::Vec2(1, 1)));
         auto percentUniform = new osg::Uniform("percent", 1.0f);
         ss->addUniform(percentUniform);
-        ss->setUpdateCallback(new TimerBarUpdater(percentUniform));
+        _timerBar->setUpdateCallback(osgf::createCallback(
+            [=](auto* obj, auto* data) { percentUniform->set(sgg.getPercentTime()); }));
     }
 
     _score = 0;
@@ -1321,7 +1363,6 @@ osg::Node* Game::createUI()
     _timerText = createText("Timer", "30", 18, osg::Vec3());
     _msg = createText("Msg", "Press r to start new game.", 18, osg::Vec3());
 
-    auto root = new osg::Group;
     root->addChild(_scoreText);
     root->addChild(_msg);
     root->addChild(_timerText);
@@ -1371,10 +1412,8 @@ osg::Node* Game::createUI()
         {
             _cursorGeom = new osg::Geometry;
             _cursorGeom->setName("Cursor");
-
             _cursorGeom->setVertexArray(vertices);
             _cursorGeom->setTexCoordArray(0, texcoords);
-
             _cursorGeom->addPrimitiveSet(
                 new osg::DrawArrays(GL_POLYGON, 0, vertices->size()));
 
@@ -1414,23 +1453,31 @@ osg::Node* Game::createUI()
 
 void Game::createStarfield()
 {
+    // stars and moon are far far away, they don't conribute to depth buffer, they use
+    // LEQUAL depth compare func. These drawables has a invalid BoundingBox, it's used to
+    // supress near far calculation. It also need a Projection node since they don't
+    // contribute to near far.
+
     auto root = new osg::Group;
     root->setNodeMask(nb_unreal_object);
     root->setName("Starfield");
 
     auto rootSS = root->getOrCreateStateSet();
 
-    // render it between opaque and transparent
+    // render it between opaque and transparent, no depth write.
     rootSS->setAttributeAndModes(new osg::Depth(osg::Depth::LEQUAL, 1.0f, 1.0f, false));
+    rootSS->setAttributeAndModes(
+        new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
     rootSS->setRenderBinDetails(5, "RenderBin");
-    rootSS->setMode(GL_BLEND, osg::StateAttribute::ON);
 
-    auto projNode = new osg::Projection(createDefaultProjectionMatrix(0.1, 10000));
+    auto radius = sgc.getFloat("starfield.radius");
+    auto radius2 = radius * radius;
+
+    auto projNode =
+        new osg::Projection(createDefaultProjectionMatrix(radius * 0.5f, radius * 1.5f));
     root->addChild(projNode);
 
     // add moon
-    auto radius = sgc.getFloat("starfield.radius");
-    auto radius2 = radius * radius;
     auto moonPos = sgc.getVec3("starfield.moon.pos");
     moonPos.normalize();
     moonPos *= radius;
@@ -1447,22 +1494,9 @@ void Game::createStarfield()
         ss->setTextureAttributeAndModes(0, new osg::PointSprite());
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
-
-        static auto program = createProgram("shader/moon.vert", "shader/moon.frag");
-        ss->setAttributeAndModes(program);
+        ss->setAttributeAndModes(createProgram("shader/moon.vert", "shader/moon.frag"));
 
         projNode->addChild(moon);
-
-        // add moon as global sky light
-        auto ls = new osg::LightSource;
-        auto light = ls->getLight();
-        light->setLightNum(1);
-        light->setPosition(osg::Vec4(moonPos, 0));
-        light->setAmbient(sgc.getVec4("starfield.moon.ambient"));
-        light->setSpecular(sgc.getVec4("starfield.moon.specular"));
-
-        _sceneRoot->addChild(ls);
-        ls->setStateSetModes(*_sceneRoot->getOrCreateStateSet(), osg::StateAttribute::ON);
     }
 
     // add stars
@@ -1494,9 +1528,7 @@ void Game::createStarfield()
         ss->setTextureAttributeAndModes(0, new osg::PointSprite());
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
-
-        static auto program = createProgram("shader/star.vert", "shader/star.frag");
-        ss->setAttributeAndModes(program);
+        ss->setAttributeAndModes(createProgram("shader/star.vert", "shader/star.frag"));
 
         projNode->addChild(stars);
     }

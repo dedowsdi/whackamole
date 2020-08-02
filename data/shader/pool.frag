@@ -37,15 +37,13 @@ void main(void)
     // pool depth is used to do something special with pool edge (glitches).
     float pool_depth = frag_depth_to_perspective_depth(texture2D(depth_map, proj_st).r) -
                        frag_depth_to_perspective_depth(gl_FragCoord.z);
-    // gl_FragColor = vec4(pool_depth / 10);
-    // return;
 
     // animate distortion, edge distortion should torward 0
     float animStep = osg_SimulationTime * 0.02;
     vec2 distort_st = texture2D(dudv_map, vec2(st.x + animStep, st.y)).xy * 0.06;
     distort_st = st + vec2(distort_st.x, distort_st.y + animStep);
     vec2 distortion = (texture2D(dudv_map, distort_st) * 2 - 1).xy * wave_strength *
-                      pow(clamp(pool_depth / 10, 0, 1), 5);
+                      pow(clamp(pool_depth / 10, 0, 1), 1.2);
 
     // get refract and reflect color
     vec2 color_st = clamp( proj_st + distortion, 0, 1);

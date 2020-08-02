@@ -152,6 +152,30 @@ void bakeTransform(osg::Node& node)
     node.accept(visitor);
 }
 
+osg::Node* readNodeFile(
+    const std::string& name, float desiredRadius, bool shiftToCenter)
+{
+    auto node = osgDB::readNodeFile(name);
+    if (!node)
+    {
+        return node;
+    }
+
+    auto& bs = node->getBound();
+    auto scale = desiredRadius / bs.radius();
+
+    auto frame = new osg::MatrixTransform;
+
+    auto m = osg::Matrix::scale(osg::Vec3(scale, scale, scale));
+    if(shiftToCenter)
+        m.preMultTranslate(-bs.center());
+
+    frame->setMatrix(m);
+    frame->addChild(node);
+
+    return frame;
+}
+
 template<typename T>
 void addGridElements(osg::Geometry& geom, int stacks, int slices, int offset, bool reverse)
 {
