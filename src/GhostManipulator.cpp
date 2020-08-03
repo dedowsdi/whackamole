@@ -31,6 +31,10 @@ bool GhostManipulator::handleFrame(
         auto side = _rotation * osg::X_AXIS;
         _eye += side * walkDirection.x() + forward * walkDirection.y();
 
+        auto radius = sgg.getSceneRadius();
+        _eye.x() = osg::clampBetween<float>(_eye.x(), -radius, radius);
+        _eye.y() = osg::clampBetween<float>(_eye.y(), -radius, radius);
+
         auto tp = sgg.getTerrainPoint(_eye.x(), _eye.y());
         _eye.z() = tp.z() + _cameraHeight;
     }

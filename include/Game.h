@@ -190,6 +190,8 @@ public:
     // 4 point normal of the closest control point
     osg::Vec3 getTerrainNormal(float x, float y);
 
+    float getSceneRadius() const { return _sceneRadius; }
+
 private:
     Game();
 
