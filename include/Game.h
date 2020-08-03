@@ -154,6 +154,8 @@ public:
 
     void highlightMole(Mole* mole);
 
+    void spawnMeteor();
+
     void highlightCursor(bool b);
 
     void removeMole(Mole* mole);
@@ -264,6 +266,9 @@ private:
     osg::ref_ptr<osg::Camera> _refractRttCamera;
 
     osg::ref_ptr<osgGA::KeySwitchMatrixManipulator> _manipulator;
+
+    osg::ref_ptr<osg::Group> _starfield;
+    osg::ref_ptr<osg::StateSet> _meteorStateSet;
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Wind> _winds;

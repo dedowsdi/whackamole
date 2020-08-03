@@ -40,16 +40,6 @@ inline float gaussRand(const osg::Vec2& v)
     return gaussRand(v.x(), v.y());
 }
 
-inline float gaussRand(float mean, float stddev, float minimum, float maximum)
-{
-    return std::max(std::min(gaussRand(mean, stddev), maximum), minimum);
-}
-
-inline float gaussRand(const osg::Vec4& v)
-{
-    return gaussRand(v[0], v[1], v[2], v[3]);
-}
-
 // [a, b)
 inline float linearRand(float a, float b)
 {

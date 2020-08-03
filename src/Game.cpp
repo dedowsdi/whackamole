@@ -1222,7 +1222,7 @@ public:
         _time -= sgg.getDeltaTime();
         if (_time <= 0)
         {
-            _time = gaussRand(_gaussRate.x(), _gaussRate.y(), 0.001f, 2.0f);
+            _time = clamp(gaussRand(_gaussRate), 0.001f, 2.0f);
             sgg.popMole();
         }
         return traverse(object, data);
@@ -1469,12 +1469,35 @@ osg::Node* Game::createUI()
     return root;
 }
 
+class MeteorSpawner : public osg::Callback
+{
+public:
+    MeteorSpawner(const osg::Vec2& gaussRate) : _gaussRate(gaussRate) {}
+
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        _time -= sgg.getDeltaTime();
+        if (_time <= 0)
+        {
+            _time = clamp(gaussRand(_gaussRate), 0.001f, 2.0f);
+            sgg.spawnMeteor();
+        }
+        return traverse(object, data);
+    }
+
+private:
+    double _time = 0.2;
+    osg::Vec2 _gaussRate;
+};
+
+
 void Game::createStarfield()
 {
     // starfield is far far away, they don't conribute to depth buffer, they use
     // LEQUAL depth compare func. These drawables has a invalid BoundingBox, it's used to
     // supress near far calculation. It also need a Projection node since they don't
     // contribute to near far.
+    // Moon and star is point sprite, meteor is rect, flying along it's -x
 
     auto root = new osg::Group;
     root->setNodeMask(nb_unreal_object);
@@ -1551,12 +1574,13 @@ void Game::createStarfield()
         projNode->addChild(stars);
     }
 
-    // add meteor
-    {
-
-    }
+    _meteorStateSet = new osg::StateSet;
+    _meteorStateSet->setAttributeAndModes(
+        createProgram("shader/meteor.vert", "shader/meteor.frag"));
+    root->addUpdateCallback(new MeteorSpawner(sgc.getVec2("starfield.meteor.rate.gauss")));
 
     _sceneRoot->addChild(root);
+    _starfield = root;
 }
 
 void Game::playWhackAnimation(const osg::Vec3& pos)
@@ -1676,6 +1700,110 @@ void Game::createStartAnimation()
     _sceneRoot->addUpdateCallback(new StartAnimationUpdater(mole));
 
     _sceneRoot->addChild(root);
+}
+
+class MeteorUpdater : public osg::Callback
+{
+public:
+    MeteorUpdater(osg::MatrixTransform* meteor, const osg::Vec3& vel, const osg::Vec3& acc)
+        : _meteor(meteor), _vel(vel), _acc(acc)
+    {
+    }
+
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        auto starfield = object->asNode()->asGroup();
+        assert(starfield);
+
+        // remove meteor
+        auto trans = _meteor->getMatrix().getTrans();
+        if (trans.z() < -100)
+        {
+            assert(_meteor->getParent(0)->removeChild(_meteor));
+            osg::ref_ptr<osg::Callback> cb = this;
+            starfield->removeUpdateCallback(this);
+            return cb->traverse(object, data);
+        }
+
+        auto dt = sgg.getDeltaTime();
+        _vel += _acc * dt;
+        _meteor->setMatrix(_meteor->getMatrix() * osg::Matrix::translate(_vel * dt));
+
+        return traverse(object, data);
+    }
+private:
+    osg::Vec3 _vel;
+    osg::Vec3 _acc;
+    osg::MatrixTransform* _meteor = 0;
+};
+
+void Game::spawnMeteor()
+{
+    // spawn outside of current view in view space
+    assert(_starfield->getNumChildren() == 1);
+
+    auto& projNode = dynamic_cast<osg::Projection&>(*_starfield->getChild(0));
+    auto& projMatrix = projNode.getMatrix();
+    double left, right, bottom, top, near, far;
+    projMatrix.getFrustum(left, right, bottom, top, near, far);
+
+    auto radius = sgc.getFloat("starfield.radius");
+    auto width = clamp(gaussRand(sgc.getVec2("starfield.meteor.width.gauss")), 1.0f, 1000.0f);
+    auto elevation =
+        clamp(gaussRand(sgc.getVec2("starfield.meteor.elevation.gauss")), 0.0f, 80.0f);
+    elevation = osg::DegreesToRadians(elevation);
+
+    auto x = right * radius / near + width * 0.5f;
+    auto y = radius * tan(elevation);
+    auto pos = osg::Vec3(x, y, -radius);
+
+    auto pitch = clamp(gaussRand(sgc.getVec2("starfield.meteor.pitch.gauss")), 0.0f, 90.0f);
+    pitch = osg::DegreesToRadians(pitch);
+    auto speed = clamp(gaussRand(sgc.getVec2("starfield.meteor.speed.gauss")), 1.0f, 1000.0f);
+    auto vel = -osg::Vec3(cos(pitch), sin(pitch), 0) * speed;
+
+    // clear pitch from view matrix, convert pos and dir to world space
+    auto m = getMainCamera()->getInverseViewMatrix();
+    auto forward = -getMatrixMajor3(m, 2); // forward in world space
+    forward.z() = 0;
+    forward.normalize();
+    auto up = osg::Z_AXIS;
+    auto side = forward ^ up;
+    side.normalize();
+    setMatrixMajor3(m, 0, side);
+    setMatrixMajor3(m, 1, up);
+    setMatrixMajor3(m, 2, -forward);
+
+    pos = pos * m;
+    vel = osg::Matrix::transform3x3(vel, m);
+
+    // create meteor
+    auto height = width / sgc.getFloat("starfield.meteor.aspectRatio");
+    auto meteor = osg::createTexturedQuadGeometry(
+        osg::Vec3(-width * 0.5f, 0, -height * 0.5f), osg::Vec3(width, 0, 0),
+        osg::Vec3(0, 0, height));
+    meteor->setName("Meteor");
+    meteor->setCullingActive(false);
+    meteor->setComputeBoundingBoxCallback(
+        static_cast<osg::Drawable::ComputeBoundingBoxCallback*>(
+            osgf::getInvalidComputeBoundingBoxCallback()));
+    meteor->setStateSet(_meteorStateSet);
+
+    static auto count = 0;
+    auto frame = new osg::MatrixTransform;
+    auto ma = osg::Matrix::rotate(osg::X_AXIS, -vel);
+    ma.postMultTranslate(pos);
+    frame->setMatrix(ma);
+    frame->addChild(meteor);
+    frame->setName("Meteor" + std::to_string(count++));
+    projNode.addChild(frame);
+
+    auto acc = vel;
+    acc.normalize();
+    acc *= clamp(gaussRand(sgc.getVec2("starfield.meteor.acceleration.gauss")), 1.0f, 1000.0f);
+
+    // animate it
+    _starfield->addUpdateCallback(new MeteorUpdater(frame, vel, acc));
 }
 
 }  // namespace toy
