@@ -597,6 +597,25 @@ void* getInvalidComputeBoundingBoxCallback()
     return callback.get();
 }
 
+namespace detail
+{
+struct InvalidComputeBoundingSphereCallback
+    : public osg::Node::ComputeBoundingSphereCallback
+{
+    virtual osg::BoundingSphere computeBound(const osg::Node&) const
+    {
+        return osg::BoundingSphere();
+    }
+};
+}  // namespace detail
+
+void* getInvalidComputeBoundingSphereCallback()
+{
+    static osg::ref_ptr<detail::InvalidComputeBoundingSphereCallback> callback =
+        new detail::InvalidComputeBoundingSphereCallback;
+    return callback.get();
+}
+
 void addConstantComputeBoundingBoxCallback(osg::Drawable& d, const osg::BoundingBox& bb)
 {
     auto cbbCallback =

@@ -743,9 +743,6 @@ void Game::clear()
     _sceneRoot->setEventCallback(0);
 
     _removeMoleCallbacks.clear();
-
-    _root->removeChild(_reflectRttCamera);
-    _root->removeChild(_refractRttCamera);
 }
 
 void Game::resetUI()
@@ -910,9 +907,9 @@ public:
 
 void Game::createPool()
 {
-    // Pool is a rect textured with reflect texture and refract texture. Global clip plane 0
-    // is used to clip above pool, Global clip plane 1 is ued to clip below pool This pool
-    // is adapted from
+    // Pool is a rect textured with reflect texture and refract texture. Rtt camera is only
+    // accepted if pool pass cull test. Global clip plane 0 is used to clip above pool,
+    // Global clip plane 1 is ued to clip below pool This pool is adapted from
     // https://www.youtube.com/watch?v=HusvGeEDU_U&list=PLRIWtICgwaX23jiqVByUs0bqhnalNTNZh&index=1
 
     auto radius = sgc.getFloat("pool.radius");
@@ -936,9 +933,6 @@ void Game::createPool()
         _reflectRttCamera->setCullMask(nb_above_waterline);
         _reflectRttCamera->setClearMask(
             GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-        _reflectRttCamera->setUpdateCallback(osgf::getPruneCallback());
-        _reflectRttCamera->setEventCallback(osgf::getPruneCallback());
-        _root->addChild(_reflectRttCamera);
 
         // flip scene by pool plane
         auto m = osg::Matrix::translate(osg::Vec3(0, 0, top));
@@ -985,9 +979,6 @@ void Game::createPool()
         _refractRttCamera->attach(osg::Camera::DEPTH_BUFFER, _depthMap);
         _refractRttCamera->setCullMask(nb_below_waterline);
         _refractRttCamera->setClearMask(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-        _refractRttCamera->setUpdateCallback(osgf::getPruneCallback());
-        _refractRttCamera->setEventCallback(osgf::getPruneCallback());
-        _root->addChild(_refractRttCamera);
 
         // clip below pool
         auto clipNode = new osg::ClipNode;
@@ -1010,7 +1001,16 @@ void Game::createPool()
         osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
     _pool->setName("Pool");
     _pool->setNodeMask(nb_visible);
-
+    _pool->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+        auto visitor = data->asNodeVisitor()->asCullVisitor();
+        // unlike other nodes, drawable cull callback is always called, it's done before
+        // cull test.
+        if (!visitor->isCulled(*obj->asDrawable()))
+        {
+            _reflectRttCamera->accept(*visitor);
+            _refractRttCamera->accept(*visitor);
+        }
+    }));
     _sceneRoot->addChild(_pool);
 
     auto ss = _pool->getOrCreateStateSet();
@@ -1046,11 +1046,11 @@ void Game::createPool()
     ss->setAttributeAndModes(material);
 
     // add some swimming fishes
-    auto root = new osg::Group;
-    root->setNodeMask(nb_fish);
-    root->setCullCallback(new PoolCreatureCullCallback);
-    root->setName("PoolCreatures");
-    _sceneRoot->addChild(root);
+    auto fishRoot = new osg::Group;
+    fishRoot->setNodeMask(nb_fish);
+    fishRoot->setCullCallback(new PoolCreatureCullCallback);
+    fishRoot->setName("PoolCreatures");
+    _sceneRoot->addChild(fishRoot);
 
     _fish = osgf::readNodeFile("model/fish.osgt", sgc.getFloat("fish.size"));
 
@@ -1066,7 +1066,7 @@ void Game::createPool()
         fish->setMatrix(osg::Matrix::translate(pos));
         fish->addChild(_fish);
         fish->addUpdateCallback(new FishUpdater());
-        root->addChild(fish);
+        fishRoot->addChild(fish);
     }
 }
 

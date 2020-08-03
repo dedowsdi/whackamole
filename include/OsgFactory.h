@@ -213,6 +213,8 @@ void* createComputeBoundingBoxCallback(ComputeBoundingBoxCallbackFunction func);
 
 void* getInvalidComputeBoundingBoxCallback();
 
+void* getInvalidComputeBoundingSphereCallback();
+
 void addConstantComputeBoundingBoxCallback(osg::Drawable& d, const osg::BoundingBox& bb);
 
 using ComputeBoundingSphereCallbackFunction =
