@@ -12,6 +12,7 @@ namespace osg
 {
 class MatrixTransform;
 class HeightField;
+class Texture3D;
 }  // namespace osg
 
 namespace osgTerrain
@@ -271,6 +272,7 @@ private:
 
     osg::ref_ptr<osg::Group> _starfield;
     osg::ref_ptr<osg::StateSet> _meteorStateSet;
+    osg::ref_ptr<osg::Texture3D> _noiseTexture3D;
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Wind> _winds;

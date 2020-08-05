@@ -381,6 +381,9 @@ void Game::createScene()
     createStartAnimation();
 
     setUseCursor(false);
+
+    osgUtil::PerlinNoise pn;
+    _noiseTexture3D = pn.create3DNoiseTexture(sgc.getInt("starfield.sky.texture.size"));
 }
 
 void Game::popMole()
@@ -1515,7 +1518,7 @@ void Game::createStarfield()
     auto radius2 = radius * radius;
 
     auto projNode =
-        new osg::Projection(createDefaultProjectionMatrix(radius * 0.5f, radius * 1.5f));
+        new osg::Projection(createDefaultProjectionMatrix(radius * 0.5f, radius * 2.0f));
     root->addChild(projNode);
 
     // add moon
@@ -1572,6 +1575,30 @@ void Game::createStarfield()
         ss->setAttributeAndModes(createProgram("shader/star.vert", "shader/star.frag"));
 
         projNode->addChild(stars);
+    }
+
+    // add sky
+    {
+        auto sky = new osg::ShapeDrawable(new osg::Sphere(osg::Vec3(), radius * 0.98));
+        sky->setName("Sky");
+        sky->setCullingActive(false);
+        sky->setComputeBoundingBoxCallback(
+            static_cast<osg::Drawable::ComputeBoundingBoxCallback*>(
+                osgf::getInvalidComputeBoundingBoxCallback()));
+
+        auto ss = sky->getOrCreateStateSet();
+
+        ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        ss->setTextureAttributeAndModes(0, _noiseTexture3D);
+        ss->setAttributeAndModes(createProgram("shader/sky.vert", "shader/sky.frag"));
+        ss->setAttributeAndModes(new osg::BlendFunc(
+            osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
+
+        auto moonDir = moonPos;
+        moonDir.normalize();
+        ss->addUniform(new osg::Uniform("moon", moonDir));
+
+        projNode->addChild(sky);
     }
 
     _meteorStateSet = new osg::StateSet;
@@ -1747,7 +1774,7 @@ void Game::spawnMeteor()
     double left, right, bottom, top, near, far;
     projMatrix.getFrustum(left, right, bottom, top, near, far);
 
-    auto radius = sgc.getFloat("starfield.radius");
+    auto radius = sgc.getFloat("starfield.radius") * 1.5;
     auto width = clamp(gaussRand(sgc.getVec2("starfield.meteor.width.gauss")), 1.0f, 1000.0f);
     auto elevation =
         clamp(gaussRand(sgc.getVec2("starfield.meteor.elevation.gauss")), 0.0f, 80.0f);
@@ -1796,7 +1823,7 @@ void Game::spawnMeteor()
     frame->setMatrix(ma);
     frame->addChild(meteor);
     frame->setName("Meteor" + std::to_string(count++));
-    projNode.addChild(frame);
+    projNode.insertChild(projNode.getNumChildren() - 1, frame);
 
     auto acc = vel;
     acc.normalize();

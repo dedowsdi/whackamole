@@ -548,7 +548,7 @@ void RenderStagePrinter::printLeaf(const osgUtil::RenderLeaf* leaf)
     if (drawable->getUseDisplayList() &&
         !(state.useVertexBufferObject(drawable->getUseVertexBufferObjects())))
     {
-        _out << " dl{" << drawable->getDisplayList(_renderInfo->getContextID());
+        _out << " dl{" << drawable->getDisplayList(_renderInfo->getContextID()) << "}";
     }
 #    endif /* ifndef  */
 
