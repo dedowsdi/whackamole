@@ -1512,7 +1512,6 @@ void Game::createStarfield()
     rootSS->setAttributeAndModes(new osg::Depth(osg::Depth::LEQUAL, 1.0f, 1.0f, false));
     rootSS->setAttributeAndModes(
         new osg::BlendFunc(osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
-    rootSS->setRenderBinDetails(5, "RenderBin");
 
     auto radius = sgc.getFloat("starfield.radius");
     auto radius2 = radius * radius;
@@ -1539,6 +1538,7 @@ void Game::createStarfield()
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
         ss->setAttributeAndModes(createProgram("shader/moon.vert", "shader/moon.frag"));
+        ss->setRenderBinDetails(2, "RenderBin");
 
         projNode->addChild(moon);
     }
@@ -1573,6 +1573,7 @@ void Game::createStarfield()
         ss->setAttributeAndModes(new osg::BlendFunc(
             osg::BlendFunc::SRC_ALPHA, osg::BlendFunc::ONE_MINUS_SRC_ALPHA));
         ss->setAttributeAndModes(createProgram("shader/star.vert", "shader/star.frag"));
+        ss->setRenderBinDetails(2, "RenderBin");
 
         projNode->addChild(stars);
     }
@@ -1597,6 +1598,7 @@ void Game::createStarfield()
         auto moonDir = moonPos;
         moonDir.normalize();
         ss->addUniform(new osg::Uniform("moon", moonDir));
+        ss->setRenderBinDetails(3, "RenderBin");
 
         projNode->addChild(sky);
     }
@@ -1604,6 +1606,7 @@ void Game::createStarfield()
     _meteorStateSet = new osg::StateSet;
     _meteorStateSet->setAttributeAndModes(
         createProgram("shader/meteor.vert", "shader/meteor.frag"));
+    _meteorStateSet->setRenderBinDetails(1, "RenderBin");
     root->addUpdateCallback(new MeteorSpawner(sgc.getVec2("starfield.meteor.rate.gauss")));
 
     _sceneRoot->addChild(root);
@@ -1774,7 +1777,7 @@ void Game::spawnMeteor()
     double left, right, bottom, top, near, far;
     projMatrix.getFrustum(left, right, bottom, top, near, far);
 
-    auto radius = sgc.getFloat("starfield.radius") * 1.5;
+    auto radius = sgc.getFloat("starfield.radius");
     auto width = clamp(gaussRand(sgc.getVec2("starfield.meteor.width.gauss")), 1.0f, 1000.0f);
     auto elevation =
         clamp(gaussRand(sgc.getVec2("starfield.meteor.elevation.gauss")), 0.0f, 80.0f);
