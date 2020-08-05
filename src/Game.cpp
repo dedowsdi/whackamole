@@ -372,18 +372,23 @@ void Game::postInit()
 
 void Game::createScene()
 {
+    sgc.reload();
+
+    auto camera = getMainCamera();
+    camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
+
     // don't add reload and resize related code here
     _hudCamera->addChild(createUI());
 
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
 
-    createStartAnimation();
-
     setUseCursor(false);
 
     osgUtil::PerlinNoise pn;
     _noiseTexture3D = pn.create3DNoiseTexture(sgc.getInt("starfield.sky.texture.size"));
+
+    createStartAnimation();
 }
 
 void Game::popMole()
@@ -1301,9 +1306,6 @@ void Game::createLights()
 
 void Game::setupCameraAndManipulator()
 {
-    auto camera = getMainCamera();
-    camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
-
     auto kcm =
         static_cast<osgGA::KeySwitchMatrixManipulator*>(_viewer->getCameraManipulator());
     kcm->selectMatrixManipulator(1);
@@ -1733,6 +1735,8 @@ void Game::createStartAnimation()
     _sceneRoot->addUpdateCallback(new StartAnimationUpdater(mole));
 
     _sceneRoot->addChild(root);
+
+    createStarfield();
 }
 
 class MeteorUpdater : public osg::Callback
