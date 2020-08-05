@@ -1626,6 +1626,9 @@ void Game::playWhackAnimation(const osg::Vec3& pos)
     auto ss = l->getOrCreateStateSet();
     ss->addUniform(exponent);
 
+     // render after grass, lightning don't write depth.
+    ss->setRenderBinDetails(11, "DepthSortedBin");
+
     _sceneRoot->addChild(l);
     l->addUpdateCallback(osgf::createCallback([=](osg::Object* object, osg::Object* data) {
         float v;
