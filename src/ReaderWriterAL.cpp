@@ -3,6 +3,7 @@
 #include <memory>
 
 #include <osgDB/FileUtils>
+#include <osgDB/FileNameUtils>
 #include <osgDB/ReaderWriter>
 #include <osgDB/Registry>
 #include <ALBuffer.h>
@@ -20,6 +21,9 @@ public:
         auto filepath = osgDB::findDataFile(file);
         if (filepath.empty())
             return ReadResult(ReadResult::FILE_NOT_FOUND);
+
+        if (!acceptsExtension(osgDB::getLowerCaseFileExtension(file)))
+            return ReadResult(ReadResult::FILE_NOT_HANDLED);
 
         std::ifstream ifs(filepath, std::ios::in | std::ios::binary);
         if (!ifs)
