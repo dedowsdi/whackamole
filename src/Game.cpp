@@ -1651,6 +1651,7 @@ void Game::popScore(const osg::Vec3& pos, int score)
 
     auto ss = text->getOrCreateStateSet();
     ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+    ss->setRenderBinDetails(11, "RenderBin");
 
     text->addUpdateCallback(osgf::createCallback([=](auto obj, auto data) {
         text->setPosition(text->getPosition() + osg::Vec3(0, 0, 10) * sgg.getDeltaTime());
