@@ -331,7 +331,7 @@ bool Game::run(osg::Object* object, osg::Object* data)
     {
         _timer -= _deltaTime;
         std::stringstream ss;
-        ss << std::setprecision(2) << std::fixed << std::showpoint << _timer;
+        ss << std::setprecision(1) << std::fixed << std::showpoint << _timer;
         _timerText->setText(ss.str());
 
         if (_timer <= 0)
@@ -1344,10 +1344,10 @@ Burrow Game::createBurrow(const osg::Vec3& pos, const osg::Vec3& normal)
     return Burrow{false, normal, frame};
 }
 
-osgText::Text* createText(
-    const std::string& name, const std::string& text, int size, const osg::Vec3& pos)
+osgText::Text* createText(const std::string& name, const std::string& text,
+    const osg::Vec4& color, int size, const osg::Vec3& pos)
 {
-    static auto font = osgText::readFontFile("fonts/arial.ttf");
+    static auto font = osgText::readFontFile("font/font.ttf");
 
     auto t = new osgText::Text;
     t->setName(name);
@@ -1355,6 +1355,7 @@ osgText::Text* createText(
     t->setFont(font);
     t->setCharacterSize(size);
     t->setAxisAlignment(osgText::TextBase::XY_PLANE);
+    t->setColor(color);
     t->setPosition(pos);
     t->setText(text);
     return t;
@@ -1383,9 +1384,13 @@ osg::Node* Game::createUI()
     }
 
     _score = 0;
-    _scoreText = createText("Score", "0", 18, osg::Vec3());
-    _timerText = createText("Timer", "30", 18, osg::Vec3());
-    _msg = createText("Msg", "Press r to start new game.", 18, osg::Vec3());
+    auto fontSize = sgc.getInt("ui.font.size");
+    _scoreText =
+        createText("Score", "0", sgc.getColor("ui.score.color"), fontSize, osg::Vec3());
+    _timerText =
+        createText("Timer", "30", sgc.getColor("ui.timer.color"), fontSize, osg::Vec3());
+    _msg = createText("Msg", "Press r to start new game.", sgc.getColor("ui.msg.color"),
+        fontSize, osg::Vec3());
 
     root->addChild(_scoreText);
     root->addChild(_msg);
@@ -1643,7 +1648,9 @@ void Game::playWhackAnimation(const osg::Vec3& pos)
 
 void Game::popScore(const osg::Vec3& pos, int score)
 {
-    auto text = createText("PopScore", std::to_string(score), 22, pos);
+    auto fontSize = sgc.getInt("ui.popscore.size");;
+    auto text = createText("PopScore", std::to_string(score),
+        sgc.getColor("ui.popscore.color"), fontSize, pos);
     text->setNodeMask(nb_visible);
     text->setAlignment(osgText::Text::CENTER_CENTER);
     text->setCharacterSizeMode(osgText::Text::SCREEN_COORDS);

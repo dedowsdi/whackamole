@@ -1,6 +1,7 @@
 #include <ToyMath.h>
 
 #include <cassert>
+#include <sstream>
 
 #include <osg/DisplaySettings>
 
@@ -172,6 +173,44 @@ std::vector<osg::Vec2> poissonDiskSample(
     }
 
     return samples;
+}
+
+osg::Vec4 htmlColorToVec4(const std::string& s)
+{
+    osg::Vec4 v(0, 0, 0, 1);
+    if (s.empty())
+    {
+        OSG_WARN << "Empty htmp color" << std::endl;
+        return v;
+    }
+
+    auto iter = s.begin();
+    if (*iter == '#')
+    {
+        ++iter;
+    }
+
+    auto l = std::distance(iter, s.end());
+    if (l != 6 && l != 8)
+    {
+        OSG_WARN << "Illegal html color : " << s << std::endl;
+        return v;
+    }
+
+    int i = 0;
+    int integer;
+    std::stringstream ss;
+
+    while (iter != s.end())
+    {
+        ss.seekg(0);
+        ss.seekp(0);
+        ss << *iter++ << *iter++;
+        ss >> std::hex >> integer;
+        v[i++] = integer / 255.0f;
+    }
+
+    return v;
 }
 
 }  // namespace toy

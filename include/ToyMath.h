@@ -426,6 +426,8 @@ inline float smoothstep(float edge0, float edge1, float x)
     return t * t * (3.0 - 2.0 * t);
 }
 
+osg::Vec4 htmlColorToVec4(const std::string& s);
+
 }  // namespace toy
 
 #endif  // BOUNCINGBALL_MATH_H

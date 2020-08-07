@@ -51,6 +51,7 @@ public:
     osg::Matrixf getMatrixf(const std::string& key) { return get<osg::Matrixf>(key); }
     osg::Matrixd getMatrixd(const std::string& key) { return get<osg::Matrixd>(key); }
     std::string getString(const std::string& key) { return get<std::string>(key); }
+    osg::Vec4 getColor(const std::string& key);
 
     // return "" if not found, no complain
     std::string search(const std::string& key);

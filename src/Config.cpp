@@ -6,6 +6,7 @@
 #include <osg/io_utils>
 #include <osg/os_utils>
 #include <osgDB/Registry>
+#include <ToyMath.h>
 
 namespace toy
 {
@@ -103,6 +104,11 @@ T Config::get(const std::string& key)
     }
 
     return t;
+}
+
+osg::Vec4 Config::getColor(const std::string& key)
+{
+    return htmlColorToVec4(getString(key));
 }
 
 std::string Config::search(const std::string& key)
