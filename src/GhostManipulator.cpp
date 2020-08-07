@@ -11,6 +11,16 @@ GhostManipulator::GhostManipulator()
     setAllowThrow(false);
 }
 
+void GhostManipulator::jump()
+{
+    if (_vel != 0)
+    {
+        return;
+    }
+
+    _vel = sgc.getFloat("camera.jump");
+}
+
 bool GhostManipulator::handleFrame(
     const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& us)
 {
@@ -19,13 +29,14 @@ bool GhostManipulator::handleFrame(
     bool retreat = walkDirection.y() < 0;
 
     auto cameraTransform = getMatrix();
+    auto dt = sgg.getDeltaTime();
 
     if (walking)
     {
         walkDirection.z() = 0;
         walkDirection.normalize();
         walkDirection *= retreat ? _walkSpeed * 0.5f : _walkSpeed;
-        walkDirection *= sgg.getDeltaTime();
+        walkDirection *= dt;
 
         auto forward = _rotation * -osg::Z_AXIS;
         auto side = _rotation * osg::X_AXIS;
@@ -35,8 +46,35 @@ bool GhostManipulator::handleFrame(
         _eye.x() = osg::clampBetween<float>(_eye.x(), -radius, radius);
         _eye.y() = osg::clampBetween<float>(_eye.y(), -radius, radius);
 
+    }
+
+    if (walking && _vel == 0)
+    {
         auto tp = sgg.getTerrainPoint(_eye.x(), _eye.y());
         _eye.z() = tp.z() + _cameraHeight;
+    }
+
+    if (_vel != 0)
+    {
+        _eye.z() += _vel * dt;
+        _vel += _gravity * dt;
+
+        if (_vel == 0)
+        {
+             // _vel == 0 is also used as on ground check
+            _vel = -0.000001f;
+        }
+
+        auto tp = sgg.getTerrainPoint(_eye.x(), _eye.y());
+        if (_eye.z() < tp.z() + _cameraHeight)
+        {
+            // Might happen before you reach the highest point.
+            _eye.z() = tp.z() + _cameraHeight;
+            if (_vel < 0)
+            {
+                _vel = 0;
+            }
+        }
     }
 
     return FirstPersonManipulator::handleFrame(ea, us);
@@ -60,6 +98,9 @@ bool GhostManipulator::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIAction
                     break;
                 case osgGA::GUIEventAdapter::KEY_D:
                     addWalkDirection(wd_right);
+                    break;
+                case osgGA::GUIEventAdapter::KEY_Space:
+                    jump();
                     break;
                 default:
                     break;

@@ -1317,6 +1317,7 @@ void Game::setupCameraAndManipulator()
     auto tp = getTerrainPoint(xy.x(), xy.y());
     tp.z() += sgc.getFloat("camera.height");
     manipulator->setHomePosition(tp, osg::Vec3(), osg::Z_AXIS);
+    manipulator->setGravity(sgc.getFloat("scene.gravity"));
     _viewer->home();
 }
 

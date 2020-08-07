@@ -17,6 +17,11 @@ public:
     float getCameraHeight() const { return _cameraHeight; }
     void setCameraHeight(float v) { _cameraHeight = v; }
 
+    void jump();
+
+    float getGravity() const { return _gravity; }
+    void setGravity(float v) { _gravity = v; }
+
 protected:
     bool handleFrame(
         const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& us) override;
@@ -46,6 +51,8 @@ protected:
     int _walkDirection = 0;
     float _walkSpeed = 1.0f;
     float _cameraHeight = 1.0f;
+    float _vel = 0;  // vertical only
+    float _gravity = 10; // vertical only
 };
 
 }  // namespace toy
