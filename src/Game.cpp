@@ -1153,6 +1153,23 @@ void Game::createTrees()
         frame->addChild(tree);
         root->addChild(frame);
     }
+
+    // apply winds
+    auto windSize = sgc.getVec4("tree.wind.size");
+    auto windSpeed = sgc.getVec2("wind.speed.gauss");
+    auto windAmplitude = sgc.getVec2("wind.amplitude.gauss");
+    auto meanStrength = windSpeed.x() * windAmplitude.x();
+    auto windSizeUniform = new osg::Uniform("wind_size", windSize);
+    root->getOrCreateStateSet()->addUniform(windSizeUniform);
+    root->addUpdateCallback(osgf::createCallback([=](auto* obj, auto* data) {
+        auto maxStrength = 0.000001f;
+        for (auto& wind: _winds)
+        {
+            maxStrength = std::max(wind.getSpeed() * wind.getStrength(), maxStrength);
+        }
+        windSizeUniform->set(osg::Vec4(windSize.x(),
+            windSize.y() * meanStrength / maxStrength, windSize.z(), windSize.w()));
+    }));
 }
 
 void Game::createMeadow()

@@ -35,8 +35,7 @@ namespace toy
 
 struct Burrow
 {
-    bool active = false;
-    osg::Vec3 normal = osg::Vec3(0, 0, 1);
+    bool active = false; osg::Vec3 normal = osg::Vec3(0, 0, 1);
     osg::MatrixTransform* node = 0;
 
     osg::Vec3 getTopCenter();
@@ -56,6 +55,9 @@ public:
 
     float frequence() { return osg::PIf * 2 / _length; }
     float phi() { return frequence() * _speed; }
+
+    float getStrength() const { return _strength; }
+    float getSpeed() const { return _speed; }
 
 private:
     void mutate();

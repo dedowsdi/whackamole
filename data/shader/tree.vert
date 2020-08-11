@@ -6,7 +6,8 @@
 
 uniform float osg_SimulationTime;
 
-// vertex_reverse_scale, strength_reverse_scale, variant_reverse_scale
+// vertex_reverse_scale, strength_reverse_scale, variant_reverse_scale,
+// flutter_reverse_scale
 uniform vec4 wind_size = vec4(500, 150, 75, 0.5);
 
 // force_scale, variant_scale
