@@ -30,7 +30,7 @@ void main()
     // make it glow
     visibility *= 1 / pow(dot(st, st), 0.5);
 
-    vec3 color = vec3(0.00, 0.1, 0.15) * visibility;
+    vec3 color = vec3(0.2, 0.1, 0.0) * visibility;
 
     gl_FragColor = vec4(color, visibility);
 }

@@ -43,7 +43,7 @@ void main(void)
     vec2 distort_st = texture2D(dudv_map, vec2(st.x + animStep, st.y)).xy * 0.06;
     distort_st = st + vec2(distort_st.x, distort_st.y + animStep);
     vec2 distortion = (texture2D(dudv_map, distort_st) * 2 - 1).xy * wave_strength *
-                      pow(clamp(pool_depth / 10, 0, 1), 1.2);
+                      pow(clamp(pool_depth / 50, 0, 1), 3);
 
     // get refract and reflect color
     vec2 color_st = clamp( proj_st + distortion, 0, 1);
@@ -53,7 +53,7 @@ void main(void)
     // fresnel effect, use fixed normal
     vec3 n = normalize(gl_NormalMatrix * vec3(0, 0, 1));
     vec3 v = normalize(-vertex);
-    float fresnel = clamp(dot(n, v), 0.2, 0.8);
+    float fresnel = clamp(dot(n, v), 0.1, 0.9);
     vec4 color = clamp(mix(reflect_color, refract_color, pow(fresnel, 2)), 0, 1);
 
     // specular, use normal map normal
@@ -68,7 +68,7 @@ void main(void)
         vec3 h = normalize(l + v);
         float ndoth = clamp(dot(detail_normal, h), 0, 1);
         color += pow(ndoth, gl_FrontMaterial.shininess) * gl_FrontMaterial.specular *
-                 gl_LightSource[1].specular * pow(clamp(pool_depth / 10, 0, 1), 2);
+                 gl_LightSource[1].specular * pow(clamp(pool_depth / 32, 0, 1), 3);
     }
 
     // give it some water color
