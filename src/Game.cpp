@@ -741,12 +741,14 @@ Game::~Game() {}
 void Game::clear()
 {
     // clear resource observer, but leave static ones
+#ifdef DEBUG
     _observer->clear();
     auto lprg = Lightning::getBillboardProgram();
     if (lprg)
     {
         _observer->addResource(*lprg);
     }
+#endif
 
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
     _sceneRoot->setUpdateCallback(0);
