@@ -68,7 +68,7 @@ std::vector<osg::Node*> searchNode(
 std::vector<osg::Node*> searchNodeByMaterial(osg::Node& node, const std::string& name);
 
 template<typename T>
-osg::NodePathList searchNodes(
+osg::NodePathList searchType(
     osg::Node& node, T* (osg::Node::*asFunc)(), int traversalMask = -1);
 
 // Window {{{1

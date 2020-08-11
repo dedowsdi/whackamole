@@ -36,6 +36,7 @@
 #include <osgTerrain/TerrainTile>
 #include <osgText/Text>
 #include <osgUtil/PerlinNoise>
+#include <osgUtil/TangentSpaceGenerator>
 #include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
 
@@ -591,6 +592,8 @@ void Game::restart()
 
     createPool();
 
+    createTrees();
+
     createMeadow();
 
     createBurrows();
@@ -1075,6 +1078,80 @@ void Game::createPool()
         fish->addChild(_fish);
         fish->addUpdateCallback(new FishUpdater());
         fishRoot->addChild(fish);
+    }
+}
+
+void Game::createTrees()
+{
+    auto root = new osg::Group;
+    root->setName("TreeRoot");
+    root->setNodeMask(nb_unreal_object);
+
+    _sceneRoot->addChild(root);
+
+    auto tree = osgDB::readNodeFile("model/spruce.osgt");
+
+    auto drawables = osgq::searchType<osg::Drawable>(*tree, &osg::Node::asDrawable);
+    assert(drawables.size() == 2);
+    auto trunk = dynamic_cast<osg::Geometry*>(drawables[0].back());
+    auto leaf = dynamic_cast<osg::Geometry*>(drawables[1].back());
+
+    // generate tangent array. You shoud not use cross in treeit, all cross share the same
+    // normal, it'll break TangentSpaceGenerator.
+    osg::ref_ptr<osgUtil::TangentSpaceGenerator> tsg = new osgUtil::TangentSpaceGenerator;
+    tsg->generate(trunk);
+    trunk->setTexCoordArray(1, tsg->getTangentArray());
+
+    tsg->generate(leaf);
+    leaf->setTexCoordArray(1, tsg->getTangentArray());
+
+    // render with program, add normal map
+    auto trunkStateSet = trunk->getOrCreateStateSet();
+    // Some triangle is not in the right order
+    trunkStateSet->setMode(
+        GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+    trunkStateSet->setAttributeAndModes(
+        sgg.createProgram("shader/tree.vert", "shader/trunk.frag"));
+    auto trunkNormalMap = new osg::Texture2D(osgDB::readImageFile("texture/bark07_n.png"));
+    trunkNormalMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+    trunkNormalMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
+    trunkStateSet->setTextureAttributeAndModes(1, trunkNormalMap);
+    trunkStateSet->addUniform(new osg::Uniform("diffuse_map", 0));
+    trunkStateSet->addUniform(new osg::Uniform("normal_map", 1));
+
+    auto leafStateSet = leaf->getOrCreateStateSet();
+    leafStateSet->setMode(
+        GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+    leafStateSet->setAttributeAndModes(
+        sgg.createProgram("shader/tree.vert", "shader/leaf.frag"));
+    leafStateSet->setDefine("FLUTTER");
+    leafStateSet->addUniform(new osg::Uniform("diffuse_map", 0));
+    leafStateSet->addUniform(new osg::Uniform("normal_map", 1));
+    auto leafNormalMap = new osg::Texture2D(osgDB::readImageFile("texture/spruce_branch_n.png"));
+    leafNormalMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+    leafNormalMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
+    leafStateSet->setTextureAttributeAndModes(1, leafNormalMap);
+    leafStateSet->addUniform(new osg::Uniform("diffuse_map", 0));
+    leafStateSet->addUniform(new osg::Uniform("normal_map", 1));
+
+    // generate trees
+    auto poolRadius = sgc.getFloat("pool.radius");
+    auto poolRadius2 = poolRadius * poolRadius;
+
+    auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
+        osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("tree.interval"), 32);
+    for (auto& p: points)
+    {
+        if (p.length2() < poolRadius2)
+        {
+            continue;
+        }
+        auto frame = new osg::MatrixTransform;
+        auto m = osg::Matrix::translate(getTerrainPoint(p.x(), p.y()));
+        m.preMultRotate(osg::Quat(linearRand(0.0f, 2.0f * osg::PIf), osg::Z_AXIS));
+        frame->setMatrix(m);
+        frame->addChild(tree);
+        root->addChild(frame);
     }
 }
 

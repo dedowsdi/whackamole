@@ -149,7 +149,7 @@ private:
 }  // namespace
 
 template<typename T>
-osg::NodePathList searchNodes(osg::Node& node, T* (osg::Node::*asFunc)(), int traversalMask)
+osg::NodePathList searchType(osg::Node& node, T* (osg::Node::*asFunc)(), int traversalMask)
 {
     SearchNodeTypeVisitor<T> visitor(asFunc);
     visitor.setTraversalMask(traversalMask);
@@ -157,16 +157,16 @@ osg::NodePathList searchNodes(osg::Node& node, T* (osg::Node::*asFunc)(), int tr
     return visitor.takeNodePathList();
 }
 
-#define INSTANTIATE_searchNodes(T)                                                         \
-    template osg::NodePathList searchNodes<T>(osg::Node&, T * (osg::Node::*)(), int);
+#define INSTANTIATE_searchType(T)                                                         \
+    template osg::NodePathList searchType<T>(osg::Node&, T * (osg::Node::*)(), int);
 
-INSTANTIATE_searchNodes(osg::Drawable);
-INSTANTIATE_searchNodes(osg::Geometry);
-INSTANTIATE_searchNodes(osg::Group);
-INSTANTIATE_searchNodes(osg::Transform);
-INSTANTIATE_searchNodes(osg::Switch);
-INSTANTIATE_searchNodes(osg::Geode);
-INSTANTIATE_searchNodes(osgTerrain::Terrain);
+INSTANTIATE_searchType(osg::Drawable);
+INSTANTIATE_searchType(osg::Geometry);
+INSTANTIATE_searchType(osg::Group);
+INSTANTIATE_searchType(osg::Transform);
+INSTANTIATE_searchType(osg::Switch);
+INSTANTIATE_searchType(osg::Geode);
+INSTANTIATE_searchType(osgTerrain::Terrain);
 
 void* getGraphicsWindow(const osgViewer::Viewer& viewer)
 {

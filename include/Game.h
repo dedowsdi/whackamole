@@ -206,6 +206,8 @@ private:
 
     void createPool();
 
+    void createTrees();
+
     void createMeadow();
 
     void createBurrows();
