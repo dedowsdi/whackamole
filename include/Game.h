@@ -30,6 +30,12 @@ namespace osgGA
 class KeySwitchMatrixManipulator;
 }
 
+namespace osgShadow
+{
+class ShadowedScene;
+class ShadowMap;
+}
+
 namespace toy
 {
 
@@ -113,6 +119,8 @@ enum node_bit
     nb_above_waterline = 1 << 1,
     nb_below_waterline = 1 << 2,
     nb_raytest = 1 << 3,
+    nb_cast_shadow = 1 << 4,
+    nb_receive_shadow = 1 << 5,
     nb_ui = nb_visible,
     nb_terrain = nb_above_waterline | nb_below_waterline | nb_raytest,
     nb_real_object = nb_above_waterline | nb_raytest,
@@ -220,7 +228,7 @@ private:
 
     Burrow createBurrow(const osg::Vec3& pos, const osg::Vec3& normal);
 
-    osg::Node* createUI();
+    void createUI();
 
     void createStarfield();
 
@@ -243,6 +251,10 @@ private:
     float _sceneHeight = 128;
     float _popRate = 0.002;
 
+    osg::ref_ptr<osgShadow::ShadowedScene> _shadowedScene;
+    osg::ref_ptr<osgShadow::ShadowMap> _shadowMap;
+
+    osg::ref_ptr<osg::Group> _uiRoot;
     osg::ref_ptr<osgText::Text> _timerText;
     osg::ref_ptr<osg::Geometry> _timerBar;
 

@@ -7,10 +7,10 @@ osg::Group {
   Children 2 {
     osg::Geode {
       UniqueID 2 
-      Name "textures\\bark\\bark07:tree" 
       Drawables 1 {
         osg::Geometry {
           UniqueID 3 
+          Name "SpruceTrunk" 
           DataVariance STATIC 
           StateSet TRUE {
             osg::StateSet {
@@ -8709,10 +8709,10 @@ osg::Group {
     }
     osg::Geode {
       UniqueID 15 
-      Name "..\\..\\data\\spruce\\spruce branch:tree" 
       Drawables 1 {
         osg::Geometry {
           UniqueID 16 
+          Name "SpruceLeaf" 
           DataVariance STATIC 
           StateSet TRUE {
             osg::StateSet {

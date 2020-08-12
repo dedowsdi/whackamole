@@ -29,6 +29,7 @@
 #include <osgGA/KeySwitchMatrixManipulator>
 #include <osgGA/OrbitManipulator>
 #include <osgGA/TrackballManipulator>
+#include <osgShadow/ShadowMap>
 #include <osgTerrain/GeometryTechnique>
 #include <osgTerrain/Layer>
 #include <osgTerrain/Locator>
@@ -39,6 +40,7 @@
 #include <osgUtil/TangentSpaceGenerator>
 #include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
+#include <osgShadow/ShadowedScene>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
@@ -331,9 +333,13 @@ bool Game::run(osg::Object* object, osg::Object* data)
     if (_status == gs_running && _deltaTime > 0)
     {
         _timer -= _deltaTime;
-        std::stringstream ss;
-        ss << std::setprecision(1) << std::fixed << std::showpoint << _timer;
-        _timerText->setText(ss.str());
+
+        if (_timerText)
+        {
+            std::stringstream ss;
+            ss << std::setprecision(1) << std::fixed << std::showpoint << _timer;
+            _timerText->setText(ss.str());
+        }
 
         if (_timer <= 0)
         {
@@ -375,16 +381,33 @@ void Game::createScene()
 {
     sgc.reload();
 
+    if (sgc.getBool("scene.shadow"))
+    {
+        _shadowedScene = new osgShadow::ShadowedScene();
+        _shadowedScene->setName("ShadowedScene");
+        // shadow map doesn't support receive shadow mask
+        // _shadowedScene->setReceivesShadowTraversalMask(nb_receive_shadow);
+        _shadowedScene->setCastsShadowTraversalMask(nb_cast_shadow);
+
+        _shadowMap = new osgShadow::ShadowMap;
+        _shadowedScene->setShadowTechnique(_shadowMap);
+        _shadowMap->setTextureSize(sgc.getVec2s("scene.shadow.texture.size"));
+
+        _root->replaceChild(_sceneRoot, _shadowedScene);
+        _sceneRoot = _shadowedScene;
+    }
+
     auto camera = getMainCamera();
     camera->setClearColor(osg::Vec4(0.1, 0.1, 0.1, 0.1));
 
-    // don't add reload and resize related code here
-    _hudCamera->addChild(createUI());
+    if (sgc.getBool("scene.ui"))
+    {
+        createUI();
+    }
 
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
 
-    setUseCursor(false);
 
     osgUtil::PerlinNoise pn;
     _noiseTexture3D = pn.create3DNoiseTexture(sgc.getInt("starfield.sky.texture.size"));
@@ -417,7 +440,7 @@ void Game::popMole()
     burrow.active = true;
 
     auto mole = new Mole(&burrow);
-    mole->setNodeMask(nb_real_object);
+    mole->setNodeMask(nb_real_object | nb_cast_shadow);
     mole->setName("Mole" + std::to_string(moleIndex++));
 
     osg::ComputeBoundsVisitor visitor;
@@ -563,7 +586,10 @@ void Game::removeMole(Mole* mole)
 void Game::updateScore(const osg::Vec3& pos, int score)
 {
     _score += score;
-    _scoreText->setText(std::to_string(_score));
+    if (_scoreText)
+    {
+        _scoreText->setText(std::to_string(_score));
+    }
 }
 
 void Game::restart()
@@ -574,7 +600,8 @@ void Game::restart()
 
     clear();
 
-    resetUI();
+    if (sgc.getBool("scene.ui"))
+        resetUI();
 
     // start new game
     _status = gs_running;
@@ -586,15 +613,19 @@ void Game::restart()
 
     createLights();
 
-    createStarfield();
+    if (sgc.getBool("scene.starfield"))
+        createStarfield();
 
     createTerrain();
 
-    createPool();
+    if (sgc.getBool("scene.pool"))
+        createPool();
 
-    createTrees();
+    if (sgc.getBool("scene.trees"))
+        createTrees();
 
-    createMeadow();
+    if (sgc.getBool("scene.meadow"))
+        createMeadow();
 
     createBurrows();
 
@@ -607,9 +638,12 @@ void Game::restart()
 
 void Game::timeout()
 {
-    _msg->setNodeMask(nb_ui);
-    _msg->setText("Press r to start new game.");
     _status = gs_timeout;
+    if (_msg)
+    {
+        _msg->setNodeMask(nb_ui);
+        _msg->setText("Press r to start new game.");
+    }
 }
 
 void Game::resize(int width, int height)
@@ -627,72 +661,82 @@ void Game::resize(int width, int height)
     _hudCamera->setProjectionMatrix(m);
 
     // resize ui
-    auto barSize = sgc.getVec2("ui.bar.size");
-    barSize = osg::componentMultiply(barSize, osg::Vec2(width, height));
-    auto y = sgc.getFloat("ui.bar.y");
-    auto x = (width - barSize.x()) * 0.5f;
+    if (_uiRoot)
+    {
+        auto barSize = sgc.getVec2("ui.bar.size");
+        barSize = osg::componentMultiply(barSize, osg::Vec2(width, height));
+        auto y = sgc.getFloat("ui.bar.y");
+        auto x = (width - barSize.x()) * 0.5f;
 
-    auto vertices = static_cast<osg::Vec3Array*>(_timerBar->getVertexArray());
-    auto corner = osg::Vec3(x, y, 0);
-    auto widthVec = osg::Vec3(barSize.x(), 0, 0);
-    auto heightVec = osg::Vec3(0, barSize.y(), 0);
-    (*vertices)[0] = corner + heightVec;
-    (*vertices)[1] = corner;
-    (*vertices)[2] = corner + widthVec;
-    (*vertices)[3] = corner + widthVec + heightVec;
-    vertices->dirty();
-    _timerBar->dirtyGLObjects();
-    _timerBar->dirtyBound();
+        auto vertices = static_cast<osg::Vec3Array*>(_timerBar->getVertexArray());
+        auto corner = osg::Vec3(x, y, 0);
+        auto widthVec = osg::Vec3(barSize.x(), 0, 0);
+        auto heightVec = osg::Vec3(0, barSize.y(), 0);
+        (*vertices)[0] = corner + heightVec;
+        (*vertices)[1] = corner;
+        (*vertices)[2] = corner + widthVec;
+        (*vertices)[3] = corner + widthVec + heightVec;
+        vertices->dirty();
+        _timerBar->dirtyGLObjects();
+        _timerBar->dirtyBound();
 
-    auto ss = _timerBar->getOrCreateStateSet();
-    ss->addUniform(new osg::Uniform("size", barSize));
+        auto ss = _timerBar->getOrCreateStateSet();
+        ss->addUniform(new osg::Uniform("size", barSize));
 
-    y += barSize.y() + 2;
+        y += barSize.y() + 2;
 
-    // place text
-    _timerText->setPosition(osg::Vec3(x + barSize.x(), y, 0));
-    _timerText->setAlignment(osgText::Text::RIGHT_BOTTOM);
+        // place text
+        _timerText->setPosition(osg::Vec3(x + barSize.x(), y, 0));
+        _timerText->setAlignment(osgText::Text::RIGHT_BOTTOM);
 
-    _scoreText->setPosition(osg::Vec3(x, y, 0));
+        _scoreText->setPosition(osg::Vec3(x, y, 0));
 
-    _msg->setPosition(osg::Vec3(x, height - 16, 0));
-    _msg->setAlignment(osgText::Text::LEFT_TOP);
+        _msg->setPosition(osg::Vec3(x, height - 16, 0));
+        _msg->setAlignment(osgText::Text::LEFT_TOP);
+    }
 
     if (_status == gs_init)
     {
         return;
     }
 
-    // resize rtt cameras.
-    // I start this with 0.5, but it cause glitches in the pool edge.
-    auto scale = 1.0f;
-
-    _reflectRttCamera->resize(width * scale, height * scale);
+    if (_reflectRttCamera)
     {
-        auto ss = _reflectRttCamera->getOrCreateStateSet();
-        ss->addUniform(new osg::Uniform(
-            "render_target_size", osg::Vec2(width * scale, height * scale)));
-        ss->addUniform(new osg::Uniform("render_target_scale", scale));
+        // resize rtt cameras.
+        // I start this with 0.5, but it cause glitches in the pool edge.
+        auto scale = 1.0f;
+
+        _reflectRttCamera->resize(width * scale, height * scale);
+        {
+            auto ss = _reflectRttCamera->getOrCreateStateSet();
+            ss->addUniform(new osg::Uniform(
+                "render_target_size", osg::Vec2(width * scale, height * scale)));
+            ss->addUniform(new osg::Uniform("render_target_scale", scale));
+        }
+
+        _refractRttCamera->resize(width * scale, height * scale);
+        {
+            auto ss = _refractRttCamera->getOrCreateStateSet();
+            ss->addUniform(new osg::Uniform(
+                "render_target_size", osg::Vec2(width * scale, height * scale)));
+            ss->addUniform(new osg::Uniform("render_target_scale", scale));
+        }
     }
 
-    _refractRttCamera->resize(width * scale, height * scale);
-    {
-        auto ss = _refractRttCamera->getOrCreateStateSet();
-        ss->addUniform(new osg::Uniform(
-            "render_target_size", osg::Vec2(width * scale, height * scale)));
-        ss->addUniform(new osg::Uniform("render_target_scale", scale));
-    }
 }
 
 void Game::moveCursor(float x, float y)
 {
-    _cursorFrame->setMatrix(osg::Matrix::translate(osg::Vec3(x, y, 0)));
+    if (_cursorFrame)
+    {
+        _cursorFrame->setMatrix(osg::Matrix::translate(osg::Vec3(x, y, 0)));
+    }
 }
 
 void Game::flashCursor(bool v)
 {
     static bool lastFlash = false;
-    if (lastFlash == v)
+    if (lastFlash == v || !_cursorFrame)
     {
         return;
     }
@@ -760,6 +804,11 @@ void Game::clear()
 
 void Game::resetUI()
 {
+    if (!_uiRoot)
+    {
+        createUI();
+    }
+
     _score = 0;
     _scoreText->setText("0");
 
@@ -1087,7 +1136,7 @@ void Game::createTrees()
 {
     auto root = new osg::Group;
     root->setName("TreeRoot");
-    root->setNodeMask(nb_unreal_object);
+    root->setNodeMask(nb_unreal_object | nb_cast_shadow);
 
     _sceneRoot->addChild(root);
 
@@ -1386,6 +1435,7 @@ void Game::createLights()
     light0->setDiffuse(sgc.getVec4("scene.headlight.diffuse"));
     light0->setSpecular(sgc.getVec4("scene.headlight.specular"));
     light0->setAmbient(sgc.getVec4("scene.headlight.ambient"));
+    _viewer->setLightingMode(osg::View::HEADLIGHT);
 
     auto moonPos = sgc.getVec3("starfield.moon.pos");
     moonPos.normalize();
@@ -1394,10 +1444,16 @@ void Game::createLights()
     light1->setLightNum(1);
     light1->setPosition(osg::Vec4(moonPos, 0));
     light1->setAmbient(sgc.getVec4("starfield.moon.ambient"));
+    light1->setDiffuse(sgc.getVec4("starfield.moon.diffuse"));
     light1->setSpecular(sgc.getVec4("starfield.moon.specular"));
 
     _sceneRoot->addChild(ls);
     ls->setStateSetModes(*ss, osg::StateAttribute::ON);
+
+    if (_shadowMap)
+    {
+        _shadowMap->setLight(light1);
+    }
 }
 
 void Game::setupCameraAndManipulator()
@@ -1457,7 +1513,7 @@ osgText::Text* createText(const std::string& name, const std::string& text,
     return t;
 }
 
-osg::Node* Game::createUI()
+void Game::createUI()
 {
     auto root = new osg::Group;
     root->setName("UIRoot");
@@ -1501,6 +1557,8 @@ osg::Node* Game::createUI()
 
     // create cursor
     {
+        setUseCursor(false);
+
         _cursorFrame = new osg::MatrixTransform;
         _cursorFrame->setName("CursorFrame");
         root->addChild(_cursorFrame);
@@ -1573,7 +1631,8 @@ osg::Node* Game::createUI()
         }
     }
 
-    return root;
+    _uiRoot = root;
+    _hudCamera->addChild(_uiRoot);
 }
 
 class MeteorSpawner : public osg::Callback
