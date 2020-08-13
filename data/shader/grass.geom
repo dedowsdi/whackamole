@@ -20,6 +20,8 @@
 #    define NUM_WINDS 4
 #endif
 
+#pragma import_defines(SHADOWED_SCENE)
+
 // world space
 uniform vec4 explosions[MAX_EXPLOSIONS];
 
@@ -34,8 +36,12 @@ struct wind
 
 uniform wind winds[NUM_WINDS];
 uniform float osg_SimulationTime;
-
 uniform float size;
+
+#ifdef SHADOWED_SCENE
+varying vec3 vertex;
+varying vec3 normal;
+#endif
 
 vec3 applyExplosions(vec3 pos)
 {
@@ -80,9 +86,13 @@ void emit_vertex(vec3 pos, vec2 tc)
         pos += applyExplosions(pos) + applyWinds(pos);
     }
 
-    gl_Position = gl_ModelViewProjectionMatrix * vec4(pos, 1);
+#ifdef SHADOWED_SCENE
+    vertex = (gl_ModelViewMatrix * vec4(pos, 1)).xyz;
+    normal = gl_NormalMatrix * vec3(0, 0, 1);
+#endif
 
     gl_TexCoord[0].xy = tc;
+    gl_Position = gl_ProjectionMatrix * vec4(vertex, 1);
     EmitVertex();
 }
 

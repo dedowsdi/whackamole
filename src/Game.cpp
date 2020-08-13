@@ -53,6 +53,7 @@
 #include <Outline.h>
 #include <Resource.h>
 #include <ToyMath.h>
+#include <ToyShadowMap.h>
 
 namespace toy
 {
@@ -345,6 +346,14 @@ bool Game::run(osg::Object* object, osg::Object* data)
         {
             timeout();
         }
+
+    }
+
+    if (_status != gs_init && _shadowMap)
+    {
+        auto ghostManipulator =
+            dynamic_cast<GhostManipulator*>(_manipulator->getMatrixManipulatorWithIndex(1));
+        _shadowMap->setCenter(ghostManipulator->getEye());
     }
 
     return traverse(object, data);
@@ -389,9 +398,10 @@ void Game::createScene()
         // _shadowedScene->setReceivesShadowTraversalMask(nb_receive_shadow);
         _shadowedScene->setCastsShadowTraversalMask(nb_cast_shadow);
 
-        _shadowMap = new osgShadow::ShadowMap;
+        _shadowMap = new ToyShadowMap;
         _shadowedScene->setShadowTechnique(_shadowMap);
         _shadowMap->setTextureSize(sgc.getVec2s("scene.shadow.texture.size"));
+        _shadowMap->addShader(osgDB::readShaderFile("shader/shadow.frag"));
 
         _root->replaceChild(_sceneRoot, _shadowedScene);
         _sceneRoot = _shadowedScene;
@@ -600,11 +610,11 @@ void Game::restart()
 
     clear();
 
-    if (sgc.getBool("scene.ui"))
-        resetUI();
-
     // start new game
     _status = gs_running;
+
+    if (sgc.getBool("scene.ui"))
+        resetUI();
 
     // cache some frequently used settings
     _sceneRadius = sgc.getFloat("scene.radius");
@@ -612,6 +622,12 @@ void Game::restart()
     _popRate = sgc.getFloat("mole.popRate");
 
     createLights();
+
+    if (_shadowMap)
+    {
+        _shadowMap->setProjectionSize(sgc.getVec2("scene.shadow.projectionSize"));
+        _shadowMap->setMainCamera(getMainCamera());
+    }
 
     if (sgc.getBool("scene.starfield"))
         createStarfield();
@@ -792,6 +808,12 @@ void Game::clear()
     {
         _observer->addResource(*lprg);
     }
+
+    if (_shadowMap)
+    {
+        _observer->addResource(*_shadowMap->getProgram());
+    }
+
 #endif
 
     _sceneRoot->removeChild(0, _sceneRoot->getNumChildren());
@@ -971,7 +993,8 @@ void Game::createPool()
 {
     // Pool is a rect textured with reflect texture and refract texture. Rtt camera is only
     // accepted if pool pass cull test. Global clip plane 0 is used to clip above pool,
-    // Global clip plane 1 is ued to clip below pool This pool is adapted from
+    // Global clip plane 1 is ued to clip below pool. No shadow in rtt. This pool is adapted
+    // from
     // https://www.youtube.com/watch?v=HusvGeEDU_U&list=PLRIWtICgwaX23jiqVByUs0bqhnalNTNZh&index=1
 
     auto radius = sgc.getFloat("pool.radius");
@@ -1016,6 +1039,7 @@ void Game::createPool()
             GL_CLIP_PLANE0, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
         ss->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT),
             osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+        ss->setDefine("SHADOWED_SCENE", "0");
 
         _reflectRttCamera->addChild(_sceneRoot);
     }
@@ -1054,6 +1078,8 @@ void Game::createPool()
         auto ss = _refractRttCamera->getOrCreateStateSet();
         ss->setMode(
             GL_CLIP_PLANE1, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+        // Use fresh new program state, avoid shadow program from ShadowMap
+        ss->setDefine("SHADOWED_SCENE", "0");
 
         _refractRttCamera->addChild(_sceneRoot);
     }
@@ -1069,6 +1095,7 @@ void Game::createPool()
         // cull test.
         if (!visitor->isCulled(*obj->asDrawable()))
         {
+            // Note, current StateSet is inherited by rtt camera, this might cause problem.
             _reflectRttCamera->accept(*visitor);
             _refractRttCamera->accept(*visitor);
         }
@@ -1091,16 +1118,17 @@ void Game::createPool()
     _normalMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
 
     ss->setTextureAttributeAndModes(0, _reflectMap);
-    ss->setTextureAttributeAndModes(1, _refractMap);
-    ss->setTextureAttributeAndModes(2, _depthMap);
-    ss->setTextureAttributeAndModes(3, _dudvMap);
-    ss->setTextureAttributeAndModes(4, _normalMap);
+    ss->setTextureAttributeAndModes(2, _refractMap);
+    ss->setTextureAttributeAndModes(3, _depthMap);
+    ss->setTextureAttributeAndModes(4, _dudvMap);
+    ss->setTextureAttributeAndModes(5, _normalMap);
 
     ss->addUniform(new osg::Uniform("reflect_map", 0));
-    ss->addUniform(new osg::Uniform("refract_map", 1));
-    ss->addUniform(new osg::Uniform("depth_map", 2));
-    ss->addUniform(new osg::Uniform("dudv_map", 3));
-    ss->addUniform(new osg::Uniform("normal_map", 4));
+    ss->addUniform(new osg::Uniform("refract_map", 2));
+    ss->addUniform(new osg::Uniform("depth_map", 3));
+    ss->addUniform(new osg::Uniform("dudv_map", 4));
+    ss->addUniform(new osg::Uniform("normal_map", 5));
+    ss->addUniform(new osg::Uniform("osgShadow_ambientBias", osg::Vec2(0.6, 0.4)));
 
     auto material = new osg::Material;
     material->setSpecular(osg::Material::FRONT_AND_BACK, osg::Vec4(0.6, 0.6, 0.6, 1));
@@ -1317,6 +1345,7 @@ void Game::createMeadow()
     auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
     texture->setResizeNonPowerOfTwoHint(false);
     ss->setTextureAttributeAndModes(0, texture);
+    ss->addUniform(new osg::Uniform("diffuse_map", 0));
 
     auto material = new osg::Material;
     material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.8, 0.8, 0.8, 0.8));

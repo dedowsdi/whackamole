@@ -14,8 +14,18 @@ uniform vec2 render_target_size;
 uniform float wave_strength = 0.02;
 uniform float osg_SimulationTime;
 
-varying vec3 normal;
 varying vec3 vertex;
+
+#pragma import_defines(SHADOWED_SCENE)
+#if SHADOWED_SCENE == 1
+uniform sampler2DShadow osgShadow_shadowTexture;
+uniform mat4 shadow_matrix;
+
+uniform vec2 osgShadow_ambientBias;
+uniform vec2 shadow_resolution = vec2(4096);
+
+varying vec3 normal;
+#endif
 
 vec2 get_near_far(mat4 m)
 {
@@ -51,7 +61,7 @@ void main(void)
     vec4 refract_color = texture2D(refract_map, color_st);
 
     // fresnel effect, use fixed normal
-    vec3 n = normalize(gl_NormalMatrix * vec3(0, 0, 1));
+    vec3 n = normalize(normal);
     vec3 v = normalize(-vertex);
     float fresnel = clamp(dot(n, v), 0.1, 0.9);
     vec4 color = clamp(mix(reflect_color, refract_color, pow(fresnel, 2)), 0, 1);
@@ -75,7 +85,19 @@ void main(void)
     color *= vec4(0.5, 1, 1, 1);
 
     // alpha blend edge
-    color.a = pow(clamp(pool_depth / 16, 0, 1), 1);
+    color.a = pow(clamp(pool_depth / 8, 0, 1), 1);
 
     gl_FragColor = color;
+
+#if SHADOWED_SCENE == 1
+    float ndotgl = dot(gl_LightSource[1].position.xyz, n);
+    float bias = 0.003 * tan(acos(clamp(ndotgl, 0, 1)));
+    vec4 shadow_st = shadow_matrix * vec4(vertex, 1);
+    float visibility = shadow2DProj(
+        osgShadow_shadowTexture, vec4(shadow_st.xy, shadow_st.z - bias, shadow_st.w))
+                           .x;
+
+    gl_FragColor.xyz *= (osgShadow_ambientBias.x + osgShadow_ambientBias.y * visibility);
+#endif
+
 }

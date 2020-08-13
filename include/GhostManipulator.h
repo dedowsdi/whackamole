@@ -22,6 +22,8 @@ public:
     float getGravity() const { return _gravity; }
     void setGravity(float v) { _gravity = v; }
 
+    const osg::Vec3d& getEye() { return _eye; }
+
 protected:
     bool handleFrame(
         const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& us) override;

@@ -65,6 +65,7 @@ set(SRC
     src/ToyAL.cpp
     src/ToyCopyOp.cpp
     src/ToyMath.cpp
+    src/ToyShadowMap.cpp
     src/ToyViewer.cpp
     src/main.cpp
     )

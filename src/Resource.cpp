@@ -153,6 +153,17 @@ void ResourceObserver::addResource(const Resource& resource)
 
 void ResourceObserver::addResource(osg::Shader* shader)
 {
+    if (!shader)
+    {
+        return;
+    }
+
+    if (shader->getFileName().empty())
+    {
+        OSG_NOTICE << "Shader " << shader << " has no file" << std::endl;
+        return;
+    }
+
     addResource(createShaderResource(shader));
 }
 

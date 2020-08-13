@@ -39,6 +39,8 @@ class ShadowMap;
 namespace toy
 {
 
+class ToyShadowMap;
+
 struct Burrow
 {
     bool active = false; osg::Vec3 normal = osg::Vec3(0, 0, 1);
@@ -252,7 +254,8 @@ private:
     float _popRate = 0.002;
 
     osg::ref_ptr<osgShadow::ShadowedScene> _shadowedScene;
-    osg::ref_ptr<osgShadow::ShadowMap> _shadowMap;
+    osg::ref_ptr<ToyShadowMap> _shadowMap;
+    osg::ref_ptr<osg::Program> _shadowProgram;
 
     osg::ref_ptr<osg::Group> _uiRoot;
     osg::ref_ptr<osgText::Text> _timerText;
