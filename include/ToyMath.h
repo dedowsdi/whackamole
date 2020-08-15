@@ -67,6 +67,7 @@ struct Has_num_components<T, decltype((void)T::num_components, 0)> : std::true_t
 
 // exclude primitive and class without num_components member.
 #define VEC_T std::enable_if_t<detail::Has_num_components<T>::value, T>
+#define NOT_VEC_T std::enable_if_t<!detail::Has_num_components<T>::value, T>
 
 template<typename T>
 inline VEC_T linearRand(const T& a, const T& b)
@@ -81,7 +82,7 @@ inline VEC_T linearRand(const T& a, const T& b)
 }
 
 template<typename T>
-inline T clamp(T v, T minimum, T maximum)
+inline NOT_VEC_T clamp(T v, T minimum, T maximum)
 {
     return v < minimum ? minimum : v > maximum ? maximum : v;
 }

@@ -37,6 +37,7 @@ struct wind
 uniform wind winds[NUM_WINDS];
 uniform float osg_SimulationTime;
 uniform float size;
+uniform float pool_radius = 150;
 
 #ifdef SHADOWED_SCENE
 varying vec3 vertex;
@@ -96,34 +97,73 @@ void emit_vertex(vec3 pos, vec2 tc)
     EmitVertex();
 }
 
-const vec2 tc0 = vec2(0);
-const vec2 tc1 = vec2(1, 0);
-const vec2 tc2 = vec2(1, 1);
-const vec2 tc3 = vec2(0, 1);
+const vec2 tc0 = vec2(1, 0);
+const vec2 tc1 = vec2(1, 1);
+const vec2 tc2 = vec2(0, 1);
+const vec2 tc3 = vec2(0, 0);
+const float[] angles = float[](0, PI / 3, PI * 2 / 3);
+
+void emit_rect(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
+{
+    emit_vertex(v0, tc0);
+    emit_vertex(v1, tc1);
+    emit_vertex(v2, tc2);
+    EndPrimitive();
+
+    emit_vertex(v0, tc0);
+    emit_vertex(v2, tc2);
+    emit_vertex(v3, tc3);
+    EndPrimitive();
+}
 
 void main(void)
 {
     vec3 vertex = gl_PositionIn[0].xyz;
     float hsize = size * 0.5;
+    float pool_radius2 = pool_radius * pool_radius;
 
-    // create 3 rect as *
-    for (int i = 0; i < 3; i++)
+    if (dot(vertex.xy, vertex.xy) < pool_radius2)
     {
-        float angle = TWO_PI * i / 3;
-        vec3 v0 = vec3(cos(angle) * hsize, sin(angle) * hsize, 0);
-        vec3 v1 = vertex + vec3(-v0.x, -v0.y, 0);
+        float theta = atan(vertex.y, vertex.x) + PI * 0.5f;
+
+        // rotate 60, 120, create 2 half rect. This should be drawn first, when
+        // you look from the origin, they are behind the rect that facing
+        // center
+        for (int i = 1; i < 3; i++)
+        {
+            float angle = theta - angles[i];
+            vec3 v0 = vec3(cos(angle) * hsize, sin(angle) * hsize, 0);
+            vec3 v3 = vertex + vec3(0);
+            v0 += vertex;
+            vec3 v1 = v0 + vec3(0, 0, size);
+            vec3 v2 = v3 + vec3(0, 0, size);
+
+            emit_rect(v0, v1, v2, v3);
+        }
+
+        // create 1 complete rect facing center
+        vec3 v0 = vec3(cos(theta) * hsize, sin(theta) * hsize, 0);
+        vec3 v3 = vertex + vec3(-v0.x, -v0.y, 0);
         v0 += vertex;
-        vec3 v2 = v1 + vec3(0, 0, size);
-        vec3 v3 = v0 + vec3(0, 0, size);
+        vec3 v1 = v0 + vec3(0, 0, size);
+        vec3 v2 = v3 + vec3(0, 0, size);
 
-        emit_vertex(v0, tc0);
-        emit_vertex(v1, tc1);
-        emit_vertex(v2, tc2);
-        EndPrimitive();
+        emit_rect(v0, v1, v2, v3);
 
-        emit_vertex(v0, tc0);
-        emit_vertex(v2, tc2);
-        emit_vertex(v3, tc3);
-        EndPrimitive();
+    }
+    else
+    {
+        // create 3 rect as *
+        for (int i = 0; i < 3; i++)
+        {
+            float angle = angles[i];
+            vec3 v0 = vec3(cos(angle) * hsize, sin(angle) * hsize, 0);
+            vec3 v3 = vertex + vec3(-v0.x, -v0.y, 0);
+            v0 += vertex;
+            vec3 v1 = v0 + vec3(0, 0, size);
+            vec3 v2 = v3 + vec3(0, 0, size);
+
+            emit_rect(v0, v1, v2, v3);
+        }
     }
 }

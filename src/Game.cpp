@@ -778,7 +778,10 @@ osg::Vec3 Game::getTerrainPoint(float x, float y)
     if (layer->getInterpolatedValue(ndcX, ndcY, h))
         return osg::Vec3(x, y, h);
     else
+    {
+        OSG_WARN << "Failed to get terrain point for " << x << "," << y << std::endl;
         return osg::Vec3();
+    }
 }
 
 osg::Vec3 Game::getTerrainNormal(float x, float y)
@@ -1253,7 +1256,7 @@ void Game::createTrees()
 
 void Game::createMeadow()
 {
-    // We only store grass position here, real grass is generate as * is geom shader. The
+    // We only store grass position here, real grass is generate as * in geom shader. The
     // grasses will be sorted in cull callback.
     //
     // This grass is adapted from
@@ -1273,37 +1276,58 @@ void Game::createMeadow()
     int cols = _sceneRadius * 2 / step;
     int rows = _sceneRadius * 2 / step;
 
-    auto poolRadius = sgc.getFloat("pool.radius");
-    auto poolRadius2 = poolRadius * poolRadius;
-
     auto geometry = new osg::Geometry;
     geometry->setName("Grass");
 
     auto vertices = new osg::Vec3Array();
     vertices->reserve(cols * rows);
 
-    auto pos = osg::Vec2();
-    auto count = 0;
+    auto pos = osg::Vec2(-step * 0.5f, 0.0f);
+    auto poolRadius = sgc.getFloat("pool.radius");
+    auto minRadius = poolRadius +  0.5 * grassSize;
+    auto minRadius2 = minRadius * minRadius;
 
-    for (auto i = 1; i < cols - 1; ++i)
+    for (auto i = 0; i < cols; ++i)
     {
         // shift odd col a little bit.
-        pos.y() = i % 2 ? 0 : 0.5 * step;
+        pos.y() = i % 2 ? 0 : -0.5 * step;
         pos.x() += step;
 
-        for (auto j = 1; j < rows - 1; ++j)
+        for (auto j = 0; j < rows; ++j)
         {
             pos.y() += step;
-
-            auto p = origin + pos + toy::diskRand(step * 0.5);
-            if (p.length2() < poolRadius2)
+            auto p = origin + pos;
+            if (p.length2() < minRadius2)
             {
                 continue;
             }
+            p += toy::diskRand(step * 0.5);
 
-            ++count;
+            if (p.length2() < minRadius2)
+            {
+                p.normalize();
+                p *= minRadius;
+            }
+
+            p = clamp(p, origin, -origin);
             vertices->push_back(getTerrainPoint(p.x(), p.y()));
         }
+    }
+
+    // create a circle around pool, user should not see *
+    auto stepAngle = step / poolRadius;
+    int stepCount = std::ceil(osg::PIf * 2 / stepAngle);
+    stepAngle = osg::PIf * 2 / stepCount;
+    auto r = poolRadius * 0.999f;  // slightly smaller then radius, it's used as condition
+                                   // check in geom shader
+    for (auto i = 0; i < stepCount; ++i)
+    {
+        auto angle = stepAngle * i;
+        vertices->push_back(getTerrainPoint(std::cos(angle) * r, std::sin(angle) * r));
+
+        // Fill the blank area between the circle and other grasses
+        vertices->push_back(getTerrainPoint(std::cos(angle + stepAngle * 0.5f) * minRadius,
+            std::sin(angle + stepAngle * 0.5f) * minRadius));
     }
 
     geometry->setVertexArray(vertices);
@@ -1338,7 +1362,7 @@ void Game::createMeadow()
 
     root->addChild(geometry);
 
-    OSG_NOTICE << "Create " << count << " grasses" << std::endl;
+    OSG_NOTICE << "Create " << vertices->size() << " grasses" << std::endl;
 
     auto ss = root->getOrCreateStateSet();
 
@@ -1364,6 +1388,7 @@ void Game::createMeadow()
     auto explosionRadius = sgc.getInt("lightning.explosionRadius");
     ss->addUniform(new osg::Uniform("size", grassSize));
     ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", maxExplosions));
+    ss->addUniform(new osg::Uniform("pool_radius", poolRadius));
     ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
     ss->setDefine("EXPLOSION_RADIUS", std::to_string(explosionRadius));
 
