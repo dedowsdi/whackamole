@@ -766,10 +766,21 @@ osg::Vec3 Game::getTerrainPoint(float x, float y)
 {
     auto col = (x - _terrainOrigin.x()) / _tileSize;
     auto row = (y - _terrainOrigin.y()) / _tileSize;
-    auto tile = _terrain->getTile(osgTerrain::TileID(0, col, row));
-    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
     auto ndcX = col - std::floor(col);
     auto ndcY = row - std::floor(row);
+    if (ndcX == 0 && col >= 1)
+        --col;
+    if (ndcY == 0 && row >= 1)
+        --row;
+
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, col, row));
+    if (!tile)
+    {
+        OSG_WARN << "Failed to get Terrain Tile for " << x << "," << y << std::endl;
+        return osg::Vec3();
+    }
+
+    auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
 
     float h;
     if (layer->getInterpolatedValue(ndcX, ndcY, h))
@@ -781,11 +792,24 @@ osg::Vec3 Game::getTerrainPoint(float x, float y)
     }
 }
 
+osgTerrain::TerrainTile* Game::getTerrainTile(float x, float y)
+{
+    auto col = (x - _terrainOrigin.x()) / _tileSize;
+    auto row = (y - _terrainOrigin.y()) / _tileSize;
+    return _terrain->getTile(osgTerrain::TileID(0, col, row));
+}
+
 osg::Vec3 Game::getTerrainNormal(float x, float y)
 {
     auto col = (x - _terrainOrigin.x()) / _tileSize;
     auto row = (y - _terrainOrigin.y()) / _tileSize;
     auto tile = _terrain->getTile(osgTerrain::TileID(0, col, row));
+    if (!tile)
+    {
+        OSG_WARN << "Failed to get Terrain Tile for " << x << "," << y << std::endl;
+        return osg::Vec3();
+    }
+
     auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
     auto heightField = layer->getHeightField();
 
@@ -1273,8 +1297,9 @@ void Game::createTrees()
 
 void Game::createMeadow()
 {
-    // We only store grass position here, real grass is generate as * in geom shader. The
-    // grasses will be sorted in cull callback.
+    // We only store grass world position here, real grass is generate as * in geom shader.
+    // The grasses will be sorted in cull callback. In order to speed up sort and rend, the
+    // meadow is divied by terrain tiles.
     //
     // This grass is adapted from
     // https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-7-rendering-countless-blades-waving-grass

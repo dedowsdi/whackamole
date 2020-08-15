@@ -18,6 +18,8 @@ class Texture3D;
 namespace osgTerrain
 {
 class Terrain;
+class TerrainTile;
+class Layer;
 }
 
 namespace osgText
@@ -199,6 +201,8 @@ public:
 
     // interpolated point
     osg::Vec3 getTerrainPoint(float x, float y);
+
+    osgTerrain::TerrainTile* getTerrainTile(float x, float y);
 
     // 4 point normal of the closest control point
     osg::Vec3 getTerrainNormal(float x, float y);

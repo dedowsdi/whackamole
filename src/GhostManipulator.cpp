@@ -43,9 +43,9 @@ bool GhostManipulator::handleFrame(
         _eye += side * walkDirection.x() + forward * walkDirection.y();
 
         auto radius = sgg.getSceneRadius();
+        // If x == radius, the TerrainTile TileID will exceed
         _eye.x() = osg::clampBetween<float>(_eye.x(), -radius, radius);
         _eye.y() = osg::clampBetween<float>(_eye.y(), -radius, radius);
-
     }
 
     if (walking && _vel == 0)
