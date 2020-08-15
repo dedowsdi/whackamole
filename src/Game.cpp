@@ -30,6 +30,7 @@
 #include <osgGA/OrbitManipulator>
 #include <osgGA/TrackballManipulator>
 #include <osgShadow/ShadowMap>
+#include <osgShadow/ShadowedScene>
 #include <osgTerrain/GeometryTechnique>
 #include <osgTerrain/Layer>
 #include <osgTerrain/Locator>
@@ -40,7 +41,6 @@
 #include <osgUtil/TangentSpaceGenerator>
 #include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
-#include <osgShadow/ShadowedScene>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
@@ -121,9 +121,7 @@ void Wind::mutate()
     _exponent = clamp(gaussRand(sgc.getVec2("wind.exponent.gauss")), 0.0f, 999.f);
     _speed = clamp(gaussRand(sgc.getVec2("wind.speed.gauss")), 0.0f, 999.f);
     _length = clamp(gaussRand(sgc.getVec2("wind.length.gauss")), 0.0f, 99999.f);
-    ;
     _duration = clamp(gaussRand(sgc.getVec2("wind.duration")), 0.0f, 99999.f);
-    ;
     _time = _duration;
     _direction = circularRand(1.0f);
     _strength = 0;
@@ -346,7 +344,6 @@ bool Game::run(osg::Object* object, osg::Object* data)
         {
             timeout();
         }
-
     }
 
     if (_status != gs_init && _shadowMap)
@@ -417,7 +414,6 @@ void Game::createScene()
 
     _root->addUpdateCallback(this);
     _root->addEventCallback(new GameEventHandler);
-
 
     osgUtil::PerlinNoise pn;
     _noiseTexture3D = pn.create3DNoiseTexture(sgc.getInt("starfield.sky.texture.size"));
@@ -738,7 +734,6 @@ void Game::resize(int width, int height)
             ss->addUniform(new osg::Uniform("render_target_scale", scale));
         }
     }
-
 }
 
 void Game::moveCursor(float x, float y)
@@ -769,10 +764,12 @@ void Game::hide(osg::Node* node)
 
 osg::Vec3 Game::getTerrainPoint(float x, float y)
 {
-    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
+    auto col = (x - _terrainOrigin.x()) / _tileSize;
+    auto row = (y - _terrainOrigin.y()) / _tileSize;
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, col, row));
     auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
-    auto ndcX = (x + _sceneRadius) * 0.5 / _sceneRadius;
-    auto ndcY = (y + _sceneRadius) * 0.5 / _sceneRadius;
+    auto ndcX = col - std::floor(col);
+    auto ndcY = row - std::floor(row);
 
     float h;
     if (layer->getInterpolatedValue(ndcX, ndcY, h))
@@ -786,15 +783,17 @@ osg::Vec3 Game::getTerrainPoint(float x, float y)
 
 osg::Vec3 Game::getTerrainNormal(float x, float y)
 {
-    auto tile = _terrain->getTile(osgTerrain::TileID(0, 0, 0));
+    auto col = (x - _terrainOrigin.x()) / _tileSize;
+    auto row = (y - _terrainOrigin.y()) / _tileSize;
+    auto tile = _terrain->getTile(osgTerrain::TileID(0, col, row));
     auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
     auto heightField = layer->getHeightField();
 
-    auto ndcX = (x + _sceneRadius) * 0.5 / _sceneRadius;
-    auto ndcY = (y + _sceneRadius) * 0.5 / _sceneRadius;
+    auto ndcX = col - std::floor(col);
+    auto ndcY = row - std::floor(row);
     auto i = std::round(heightField->getNumColumns() * ndcX);
     auto j = std::round(heightField->getNumRows() * ndcY);
-    return _heightField->getNormal(i, j);
+    return heightField->getNormal(i, j);
 }
 
 Game::Game() {}
@@ -852,86 +851,103 @@ void Game::createTerrain()
     // Perlin noised generated height field terrain. A hole will be digged in center as
     // pool.
 
-    _heightField = new osg::HeightField;
+    auto colorLayer =
+        new osgTerrain::ImageLayer(osgDB::readImageFile("texture/ground.jpg"));
+    _terrain = new osgTerrain::Terrain;
+    _terrain->setNodeMask(nb_terrain);
 
+    _tileCount = sgc.getInt("terrain.tile.count");
+    _tileSize = sgc.getFloat("terrain.tile.size");
     // make sure no scale happens between heightfiled and heightfield layer, otherwise
     // HeightField::getNormal will break
-    auto rows = sgc.getInt("terrain.rows");
-    auto cols = sgc.getInt("terrain.cols");
-    auto xInterval = _sceneRadius * 2 / cols;
-    auto yInterval = _sceneRadius * 2 / rows;
-
-    _heightField->allocate(rows, cols);
-    _heightField->setXInterval(xInterval);
-    _heightField->setYInterval(yInterval);
-    _heightField->setOrigin(osg::Vec3(-_sceneRadius, -_sceneRadius, 0));
+    auto tileRows = sgc.getInt("terrain.tile.rows");
+    auto tileCols = sgc.getInt("terrain.tile.cols");
+    auto xInterval = _tileSize / tileCols;
+    auto yInterval = _tileSize / tileRows;
+    auto origin = osg::Vec2(-_tileSize * _tileCount * 0.5f, -_tileSize * _tileCount * 0.5f);
+    _terrainOrigin = origin;
+    _sceneRadius = -origin.x();
 
     osgUtil::PerlinNoise pn;
     pn.SetNoiseFrequency(64);
-
-    auto yStep = 0.03;
-    auto xStep = 0.03;
-
     // Perlin noise used fixed seed 30757, we random the start coordinates to random the
     // terrain.
-    auto coord = osg::Vec2(linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f));
+    auto startCoord = osg::Vec2(linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f));
     auto poolRadius = sgc.getFloat("pool.radius");
     auto poolBottomRadius = sgc.getFloat("pool.bottomRadius");
     auto poolDepth = sgc.getFloat("pool.depth");
 
-    for (int y = 0; y < rows; ++y)
+    auto yStep = 0.03;
+    auto xStep = 0.03;
+
+    // create n*n TerrainTile. Each TerrainTile use HeightFieldLayer as elevation layer.
+    for (auto i = 0; i < _tileCount; ++i)
     {
-        coord[1] += yStep;
-        coord[0] = 0;
-
-        for (int x = 0; x < cols; ++x)
+        for (auto j = 0; j < _tileCount; ++j)
         {
-            coord[0] += xStep;
-            auto h = pn.PerlinNoise2D(coord[0], coord[1], 2, 2, 3) * _sceneHeight;
+            // populate HeightField
+            auto heightField = new osg::HeightField;
+            heightField->allocate(tileRows, tileCols);
+            heightField->setXInterval(xInterval);
+            heightField->setYInterval(yInterval);
+            heightField->setOrigin(
+                osg::Vec3(_tileSize * i + origin.x(), _tileSize * j + origin.y(), 0));
 
-            // dig pool
-            auto vertex = _heightField->getVertex(x, y);
-            auto l = osg::Vec2(vertex.x(), vertex.y()).length();
-            if (l < poolRadius)
+            auto tileCoord = startCoord + osg::Vec2(xStep * (tileCols - 1) * i,
+                                              yStep * (tileRows - 1) * j);
+            auto coord = tileCoord - osg::Vec2(xStep, yStep);
+            for (int y = 0; y < tileRows; ++y)
             {
-                h -= mix(
-                    0.0f, poolDepth, 1.0f - smoothstep(poolBottomRadius, poolRadius, l));
+                coord[1] += yStep;
+                coord[0] = tileCoord.x();
+
+                for (int x = 0; x < tileCols; ++x)
+                {
+                    coord[0] += xStep;
+                    auto h = pn.PerlinNoise2D(coord[0], coord[1], 2, 2, 3) * _sceneHeight;
+
+                    // dig pool
+                    auto vertex = heightField->getVertex(x, y);
+                    auto l = osg::Vec2(vertex.x(), vertex.y()).length();
+                    if (l < poolRadius)
+                    {
+                        h -= mix(0.0f, poolDepth,
+                            1.0f - smoothstep(poolBottomRadius, poolRadius, l));
+                    }
+
+                    heightField->setHeight(x, y, h);
+                }
             }
 
-            _heightField->setHeight(x, y, h);
+            // create TerrainTile
+            auto locator = new osgTerrain::Locator;
+            locator->setCoordinateSystemType(osgTerrain::Locator::GEOGRAPHIC);
+            auto tileWorldOrigin = origin + osg::Vec2(_tileSize * i, _tileSize * j);
+            locator->setTransformAsExtents(tileWorldOrigin.x(), tileWorldOrigin.y(),
+                tileWorldOrigin.x() + _tileSize, tileWorldOrigin.y() + _tileSize);
+
+            auto layer = new osgTerrain::HeightFieldLayer(heightField);
+            layer->setLocator(locator);
+
+            auto tile = new osgTerrain::TerrainTile;
+            tile->setTerrainTechnique(new osgTerrain::GeometryTechnique);
+            tile->setTileID(osgTerrain::TileID(0, i, j));
+            tile->setElevationLayer(layer);
+            tile->setColorLayer(0, colorLayer);
+
+            tile->setTerrain(_terrain);
+            _terrain->addChild(tile);
         }
     }
 
-    auto locator = new osgTerrain::Locator;
-    locator->setCoordinateSystemType(osgTerrain::Locator::GEOGRAPHIC);
-    locator->setTransformAsExtents(
-        -_sceneRadius, -_sceneRadius, _sceneRadius, _sceneRadius);
-
-    auto layer = new osgTerrain::HeightFieldLayer(_heightField);
-    layer->setLocator(locator);
-
-    auto colorLayer =
-        new osgTerrain::ImageLayer(osgDB::readImageFile("texture/ground.jpg"));
-
-    auto tile = new osgTerrain::TerrainTile;
-    tile->setTerrainTechnique(new osgTerrain::GeometryTechnique);
-    tile->setTileID(osgTerrain::TileID(0, 0, 0));
-    tile->setElevationLayer(layer);
-    tile->setColorLayer(0, colorLayer);
-
-    _terrain = new osgTerrain::Terrain;
-    _terrain->setNodeMask(nb_terrain);
-    tile->setTerrain(_terrain);
-    _terrain->addChild(tile);
-
     auto ss = _terrain->getOrCreateStateSet();
-
     auto material = new osg::Material;
     material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.75, 0.75, 0.75, 1));
-
     ss->setAttributeAndModes(material);
-
     _sceneRoot->addChild(_terrain);
+
+    OSG_NOTICE << "Create " << _tileCount << "x" << _tileCount << " terrain tiles"
+               << std::endl;
 }
 
 class FishUpdater : public osg::Callback
@@ -1209,7 +1225,8 @@ void Game::createTrees()
     leafStateSet->setDefine("FLUTTER");
     leafStateSet->addUniform(new osg::Uniform("diffuse_map", 0));
     leafStateSet->addUniform(new osg::Uniform("normal_map", 1));
-    auto leafNormalMap = new osg::Texture2D(osgDB::readImageFile("texture/spruce_branch_n.png"));
+    auto leafNormalMap =
+        new osg::Texture2D(osgDB::readImageFile("texture/spruce_branch_n.png"));
     leafNormalMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
     leafNormalMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
     leafStateSet->setTextureAttributeAndModes(1, leafNormalMap);
@@ -1284,7 +1301,7 @@ void Game::createMeadow()
 
     auto pos = osg::Vec2(-step * 0.5f, 0.0f);
     auto poolRadius = sgc.getFloat("pool.radius");
-    auto minRadius = poolRadius +  0.5 * grassSize;
+    auto minRadius = poolRadius + 0.5 * grassSize;
     auto minRadius2 = minRadius * minRadius;
 
     for (auto i = 0; i < cols; ++i)
@@ -1710,7 +1727,6 @@ private:
     osg::Vec2 _gaussRate;
 };
 
-
 void Game::createStarfield()
 {
     // starfield is far far away, they don't conribute to depth buffer, they use
@@ -1765,7 +1781,7 @@ void Game::createStarfield()
         auto stars = new osg::Geometry;
         stars->setName("Star");
         auto vertices = new osg::Vec4Array(osg::Array::BIND_PER_VERTEX);
-        auto numStars = sgc.getInt("scene.numStars");
+        auto numStars = sgc.getInt("starfield.numStars");
         vertices->reserve(numStars);
         for (auto i = 0; i < numStars; ++i)
         {
@@ -1806,7 +1822,8 @@ void Game::createStarfield()
 
         auto ss = sky->getOrCreateStateSet();
 
-        ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        ss->setMode(
+            GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
         ss->setTextureAttributeAndModes(0, _noiseTexture3D);
         ss->setAttributeAndModes(createProgram("shader/sky.vert", "shader/sky.frag"));
         ss->setAttributeAndModes(new osg::BlendFunc(
@@ -1843,7 +1860,7 @@ void Game::playWhackAnimation(const osg::Vec3& pos)
     auto ss = l->getOrCreateStateSet();
     ss->addUniform(exponent);
 
-     // render after grass, lightning don't write depth.
+    // render after grass, lightning don't write depth.
     ss->setRenderBinDetails(11, "DepthSortedBin");
 
     _sceneRoot->addChild(l);
@@ -1857,7 +1874,8 @@ void Game::playWhackAnimation(const osg::Vec3& pos)
 
 void Game::popScore(const osg::Vec3& pos, int score)
 {
-    auto fontSize = sgc.getInt("ui.popscore.size");;
+    auto fontSize = sgc.getInt("ui.popscore.size");
+    ;
     auto text = createText("PopScore", std::to_string(score),
         sgc.getColor("ui.popscore.color"), fontSize, pos);
     text->setNodeMask(nb_visible);
@@ -1986,6 +2004,7 @@ public:
 
         return traverse(object, data);
     }
+
 private:
     osg::Vec3 _vel;
     osg::Vec3 _acc;
@@ -2003,7 +2022,8 @@ void Game::spawnMeteor()
     projMatrix.getFrustum(left, right, bottom, top, near, far);
 
     auto radius = sgc.getFloat("starfield.radius");
-    auto width = clamp(gaussRand(sgc.getVec2("starfield.meteor.width.gauss")), 1.0f, 1000.0f);
+    auto width =
+        clamp(gaussRand(sgc.getVec2("starfield.meteor.width.gauss")), 1.0f, 1000.0f);
     auto elevation =
         clamp(gaussRand(sgc.getVec2("starfield.meteor.elevation.gauss")), 0.0f, 80.0f);
     elevation = osg::DegreesToRadians(elevation);
@@ -2014,12 +2034,13 @@ void Game::spawnMeteor()
 
     auto pitch = clamp(gaussRand(sgc.getVec2("starfield.meteor.pitch.gauss")), 0.0f, 90.0f);
     pitch = osg::DegreesToRadians(pitch);
-    auto speed = clamp(gaussRand(sgc.getVec2("starfield.meteor.speed.gauss")), 1.0f, 1000.0f);
+    auto speed =
+        clamp(gaussRand(sgc.getVec2("starfield.meteor.speed.gauss")), 1.0f, 1000.0f);
     auto vel = -osg::Vec3(cos(pitch), sin(pitch), 0) * speed;
 
     // clear pitch from view matrix, convert pos and dir to world space
     auto m = getMainCamera()->getInverseViewMatrix();
-    auto forward = -getMatrixMajor3(m, 2); // forward in world space
+    auto forward = -getMatrixMajor3(m, 2);  // forward in world space
     forward.z() = 0;
     forward.normalize();
     auto up = osg::Z_AXIS;
@@ -2034,9 +2055,9 @@ void Game::spawnMeteor()
 
     // create meteor
     auto height = width / sgc.getFloat("starfield.meteor.aspectRatio");
-    auto meteor = osg::createTexturedQuadGeometry(
-        osg::Vec3(-width * 0.5f, 0, -height * 0.5f), osg::Vec3(width, 0, 0),
-        osg::Vec3(0, 0, height));
+    auto meteor =
+        osg::createTexturedQuadGeometry(osg::Vec3(-width * 0.5f, 0, -height * 0.5f),
+            osg::Vec3(width, 0, 0), osg::Vec3(0, 0, height));
     meteor->setName("Meteor");
     meteor->setCullingActive(false);
     meteor->setComputeBoundingBoxCallback(
@@ -2055,7 +2076,8 @@ void Game::spawnMeteor()
 
     auto acc = vel;
     acc.normalize();
-    acc *= clamp(gaussRand(sgc.getVec2("starfield.meteor.acceleration.gauss")), 1.0f, 1000.0f);
+    acc *=
+        clamp(gaussRand(sgc.getVec2("starfield.meteor.acceleration.gauss")), 1.0f, 1000.0f);
 
     // animate it
     _starfield->addUpdateCallback(new MeteorUpdater(frame, vel, acc));

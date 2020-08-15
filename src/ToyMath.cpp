@@ -64,6 +64,12 @@ std::vector<osg::Vec2> poissonDiskSample(
     std::vector<int> actives;
     std::vector<int> grid;
 
+    if (minExt.x() > maxExt.x() || minExt.y() > maxExt.y())
+    {
+        OSG_WARN << "Illegal possion disk extent" << std::endl;
+        return samples;
+    }
+
     // step0 : Initialize an n-dimensional background grid for storing samples and
     // accelerating spatial searches. We pick the cell size to  be bounded by
     // r/sqrt(N), so that each grid cell will contain at most one sample

@@ -274,8 +274,10 @@ private:
 
     osg::ref_ptr<osg::Node> _cursor;
 
+    float _tileSize = 1;
+    int _tileCount = 1;
+    osg::Vec2 _terrainOrigin;
     osg::ref_ptr<osgText::Text> _msg;
-    osg::ref_ptr<osg::HeightField> _heightField;
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
 
     osg::ref_ptr<osg::Geometry> _pool;
