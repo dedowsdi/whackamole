@@ -1368,6 +1368,7 @@ void Game::createMeadow()
 
     // divide meadow
     std::map<int, osg::Geometry*> meadowMap;
+    bool useFixedBoundingBox = sgc.getBool("meadow.group.fixBoundingBox");
     for (auto i = 0; i < numGroups; i++)
     {
         for (auto j = 0; j < numGroups; j++)
@@ -1387,6 +1388,22 @@ void Game::createMeadow()
             geom->setUseVertexArrayObject(false);
             geom->setDataVariance(osg::Object::DYNAMIC);
 
+            if (useFixedBoundingBox)
+            {
+                auto x0 = _terrainOrigin.x() + i * groupSize;
+                auto y0 = _terrainOrigin.y() + j * groupSize;
+                auto x1 = x0 + groupSize;
+                auto y1 = y0 + groupSize;
+                auto z0 = -10;  // any value
+                auto z1 = 10;
+
+                auto cbbcb =
+                    osgf::createComputeBoundingBoxCallback([=](const osg::Drawable&) {
+                        return osg::BoundingBox(x0, y0, z0, x1, y1, z1);
+                    });
+                geom->setComputeBoundingBoxCallback(
+                    static_cast<osg::Drawable::ComputeBoundingBoxCallback*>(cbbcb));
+            }
             group->addChild(geom);
 
             meadowMap[j * numGroups + i] = geom;
