@@ -26,6 +26,7 @@
 #include <osgAnimation/UpdateBone>
 #include <osgDB/ReadFile>
 #include <osgUtil/SmoothingVisitor>
+#include <osg/PolygonMode>
 
 #include <OsgQuery.h>
 
@@ -116,6 +117,23 @@ osg::MatrixTransform* createBox(const osg::BoundingBox& box, const osg::Vec4& co
 {
     return createBoxAt(box.center(), box.xMax() - box.xMin(), box.yMax() - box.yMin(),
         box.zMax() - box.zMin(), color);
+}
+
+osg::MatrixTransform* createBoundingBoxWireFrame(
+    const osg::BoundingBox& box, const osg::Vec4& color, int binNum)
+{
+    static auto ss = new osg::StateSet;
+    ss->setAttributeAndModes(
+        new osg::PolygonMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::LINE));
+    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+    ss->setMode(GL_BLEND, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+    ss->setRenderBinDetails(binNum, "RenderBin");
+    ss->setTextureAttributeAndModes(0, 0);
+
+    auto node = createBox(box, color);
+    node->setStateSet(ss);
+
+    return node;
 }
 
 namespace detail

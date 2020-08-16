@@ -158,6 +158,7 @@ void RenderStagePrinter::printRenderBin(const osgUtil::RenderBin* bin)
                 previousStateGrouph = leaf->_parent;
                 previousStateSet = ss;
             }
+            _out << "depth : " << leaf->_depth << "\n";
             printLeaf(leaf);
         }
     }

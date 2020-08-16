@@ -1316,7 +1316,7 @@ public:
         auto eyeLocal = cv->getEyeLocal();
 
         auto leaf = object->asNode()->asGroup();
-        assert(leaf && leaf->getNumChildren() == 1);
+        assert(leaf && leaf->getNumChildren() <= 2);
 
         auto ev = eyeLocal - leaf->getBound().center();
 
@@ -1520,10 +1520,20 @@ void Game::createMeadow()
 
     root->addCullCallback(explosionCallback);
 
+    auto drawBoundingBox = sgc.getBool("meadow.group.drawBoundingBox");
     for (auto& pair: meadowMap)
     {
         auto leaf = pair.second->getParent(0);
         leaf->addCullCallback(new SortByDepth);
+
+        if (drawBoundingBox)
+        {
+            auto hsv = linearRand(osg::Vec3(0, 0, 1), osg::Vec3(1, 1, 1));
+            auto color = hsv2rgb(hsv);
+            auto box = osgf::createBoundingBoxWireFrame(
+                pair.second->getBoundingBox(), osg::Vec4(color, 1));
+            _sceneRoot->addChild(box);
+        }
     }
 
     _winds.resize(sgc.getInt("wind.count"));

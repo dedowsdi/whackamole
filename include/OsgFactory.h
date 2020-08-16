@@ -141,6 +141,10 @@ osg::MatrixTransform* createBoxAt(
 osg::MatrixTransform* createBox(
     const osg::BoundingBox& box, const osg::Vec4& color = osg::Vec4(1, 1, 1, 1));
 
+// use GL_LINE polygin mode, no depth test, no blend, no texture. Render at custom bin num
+osg::MatrixTransform* createBoundingBoxWireFrame(const osg::BoundingBox& box,
+    const osg::Vec4& color = osg::Vec4(1, 1, 1, 1), int binNum = 99);
+
 // Bake transform into geometry.
 void bakeTransform(osg::Node& node);
 
