@@ -613,7 +613,6 @@ void Game::restart()
         resetUI();
 
     // cache some frequently used settings
-    _sceneRadius = sgc.getFloat("scene.radius");
     _sceneHeight = sgc.getFloat("scene.height");
     _popRate = sgc.getFloat("mole.popRate");
 
@@ -954,6 +953,7 @@ void Game::createTerrain()
             layer->setLocator(locator);
 
             auto tile = new osgTerrain::TerrainTile;
+            tile->setName("Tile" + std::to_string(i) + "," + std::to_string(j));
             tile->setTerrainTechnique(new osgTerrain::GeometryTechnique);
             tile->setTileID(osgTerrain::TileID(0, i, j));
             tile->setElevationLayer(layer);
@@ -1295,11 +1295,63 @@ void Game::createTrees()
     }));
 }
 
+class SortByDepth : public osg::Callback
+{
+public:
+    SortByDepth()
+    {
+        _maxDistance = sgc.getFloat("meadow.group.sort.maxDistance");
+        _sortFrames = sgc.getFloat("meadow.group.sort.frames");
+    }
+
+    bool run(osg::Object* object, osg::Object* data) override
+    {
+        auto cv = data->asNodeVisitor()->asCullVisitor();
+        if (cv->getCurrentCamera() != sgg.getMainCamera())
+        {
+            return traverse(object, data);
+        }
+
+        auto lookVector = cv->getLookVectorLocal();
+        auto eyeLocal = cv->getEyeLocal();
+
+        auto leaf = object->asNode()->asGroup();
+        assert(leaf && leaf->getNumChildren() == 1);
+
+        auto ev = eyeLocal - leaf->getBound().center();
+
+        if (cv->getFrameStamp()->getFrameNumber() % _sortFrames != 0 &&
+            ev.length() > _maxDistance)
+        {
+            return traverse(object, data);
+        }
+
+        auto geom = leaf->getChild(0)->asGeometry();
+
+        auto& vertices = static_cast<osg::Vec3Array&>(*geom->getVertexArray());
+
+        std::sort(vertices.begin(), vertices.end(),
+            [&](const osg::Vec3& v0, const osg::Vec3& v1) -> bool {
+                return (v0 - eyeLocal) * lookVector > (v1 - eyeLocal) * lookVector;
+            });
+        vertices.dirty();
+        // no dirty bound and gl object
+        return traverse(object, data);
+    }
+private:
+    float _maxDistance = 1024;
+    int _sortFrames = 8;
+};
+
 void Game::createMeadow()
 {
     // We only store grass world position here, real grass is generate as * in geom shader.
-    // The grasses will be sorted in cull callback. In order to speed up sort and rend, the
-    // meadow is divied by terrain tiles.
+    // The grasses will be sorted in cull callback. In order to speed up cull and sort, the
+    // meadow is divied into n * n groups. All visible grasses are sorted per
+    // meadow.grass.sort.frames, otherwise only grasses in maeadow.group.sort.maxDistance
+    // are sorted.
+    //
+    // Known issue : If you walk along the group edge, the blend will be wrong.
     //
     // This grass is adapted from
     // https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-7-rendering-countless-blades-waving-grass
@@ -1307,25 +1359,61 @@ void Game::createMeadow()
     // https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-1-effective-water-simulation-physical-models
 
     auto root = new osg::Group;
-    root->setName("Meadow");
     root->setNodeMask(nb_unreal_object);
+    _sceneRoot->addChild(root);
 
-    auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
+    // create meadow geometry for each tile
+    auto numGroups = sgc.getInt("meadow.group.count");
+    auto groupSize = _sceneRadius * 2 / numGroups;
+
+    // divide meadow
+    std::map<int, osg::Geometry*> meadowMap;
+    for (auto i = 0; i < numGroups; i++)
+    {
+        for (auto j = 0; j < numGroups; j++)
+        {
+            auto name = "Meadow" + std::to_string(i) + ":" + std::to_string(j);
+
+            auto group = new osg::Group;
+            group->setName(name);
+            root->addChild(group);
+
+            auto geom = new osg::Geometry;
+            geom->setName(name);
+
+            auto vertices = new osg::Vec3Array;
+            geom->setVertexArray(vertices);
+            geom->setUseDisplayList(false);
+            geom->setUseVertexArrayObject(false);
+            geom->setDataVariance(osg::Object::DYNAMIC);
+
+            group->addChild(geom);
+
+            meadowMap[j * numGroups + i] = geom;
+        }
+    }
+
+    auto addGrass = [&](const osg::Vec2& p) {
+        int i = (p.x() - _terrainOrigin.x()) / groupSize;
+        int j = (p.y() - _terrainOrigin.y()) / groupSize;
+        int idx = j * numGroups + i;
+        auto it = meadowMap.find(idx);
+        assert(it != meadowMap.end());
+        auto geom = it->second;
+        auto vertices = static_cast<osg::Vec3Array*>(geom->getVertexArray());
+        vertices->push_back(getTerrainPoint(p.x(), p.y()));
+    };
+
+    // create grass points
     auto grassSize = sgc.getFloat("meadow.grass.size");
+    auto poolRadius = sgc.getFloat("pool.radius");
+    auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
     auto step = sgc.getFloat("meadow.grass.step") * grassSize;
 
-    // create grasses
     int cols = _sceneRadius * 2 / step;
     int rows = _sceneRadius * 2 / step;
 
-    auto geometry = new osg::Geometry;
-    geometry->setName("Grass");
-
-    auto vertices = new osg::Vec3Array();
-    vertices->reserve(cols * rows);
-
     auto pos = osg::Vec2(-step * 0.5f, 0.0f);
-    auto poolRadius = sgc.getFloat("pool.radius");
     auto minRadius = poolRadius + 0.5 * grassSize;
     auto minRadius2 = minRadius * minRadius;
 
@@ -1352,7 +1440,7 @@ void Game::createMeadow()
             }
 
             p = clamp(p, origin, -origin);
-            vertices->push_back(getTerrainPoint(p.x(), p.y()));
+            addGrass(p);
         }
     }
 
@@ -1365,47 +1453,27 @@ void Game::createMeadow()
     for (auto i = 0; i < stepCount; ++i)
     {
         auto angle = stepAngle * i;
-        vertices->push_back(getTerrainPoint(std::cos(angle) * r, std::sin(angle) * r));
+        addGrass(osg::Vec2(std::cos(angle) * r, std::sin(angle) * r));
 
         // Fill the blank area between the circle and other grasses
-        vertices->push_back(getTerrainPoint(std::cos(angle + stepAngle * 0.5f) * minRadius,
+        addGrass(osg::Vec2(std::cos(angle + stepAngle * 0.5f) * minRadius,
             std::sin(angle + stepAngle * 0.5f) * minRadius));
     }
 
-    geometry->setVertexArray(vertices);
-    geometry->addPrimitiveSet(new osg::DrawArrays(GL_POINTS, 0, vertices->size()));
-    geometry->setDataVariance(osg::Object::DYNAMIC);
-    geometry->setUseDisplayList(false);
-    geometry->setUseVertexArrayObject(false);
+    // create PrimitiveSet for each meadow
+    auto count = 0;
+    for (auto& pair: meadowMap)
+    {
+        auto geom = pair.second;
+        auto vertices = geom->getVertexArray();
+        geom->addPrimitiveSet(
+            new osg::DrawArrays(GL_POINTS, 0, vertices->getNumElements()));
+        count += vertices->getNumElements();
+    }
 
-    // sort by depth, only done for main camera.
-    auto sortByDepth = osgf::createCallback([](osg::Object* obj, osg::Object* data) {
-        auto cv = data->asNodeVisitor()->asCullVisitor();
-        if (cv->getCurrentCamera() != sgg.getMainCamera())
-        {
-            return;
-        }
+    OSG_NOTICE << "Create " << count << " grasses" << std::endl;
 
-        auto lookVector = cv->getLookVectorLocal();
-        auto eyeLocal = cv->getEyeLocal();
-
-        auto geom = obj->asNode()->asGeometry();
-        auto vertices = static_cast<osg::Vec3Array*>(geom->getVertexArray());
-
-        std::sort(vertices->begin(), vertices->end(),
-            [&](const osg::Vec3& v0, const osg::Vec3& v1) -> bool {
-                return (v0 - eyeLocal) * lookVector > (v1 - eyeLocal) * lookVector;
-            });
-
-        vertices->dirty();
-        // no dirty bound and gl object
-    });
-    geometry->addCullCallback(sortByDepth);
-
-    root->addChild(geometry);
-
-    OSG_NOTICE << "Create " << vertices->size() << " grasses" << std::endl;
-
+    // create meadow stateset
     auto ss = root->getOrCreateStateSet();
 
     auto texture = new osg::Texture2D(osgDB::readImageFile("texture/grass0.png"));
@@ -1434,11 +1502,12 @@ void Game::createMeadow()
     ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
     ss->setDefine("EXPLOSION_RADIUS", std::to_string(explosionRadius));
 
+    // sort by depth, only done for main camera.
     _explosions.assign(maxExplosions, osg::Vec4());
 
     // update explosions only for main camera cull traversal
     auto explosionUniform = ss->getUniform("explosions");
-    root->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+    auto explosionCallback = osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
         if (visitor->getCurrentCamera() == getMainCamera())
         {
@@ -1447,18 +1516,25 @@ void Game::createMeadow()
                 explosionUniform->setElement(i, _explosions[i]);
             }
         }
-    }));
+    });
+
+    root->addCullCallback(explosionCallback);
+
+    for (auto& pair: meadowMap)
+    {
+        auto leaf = pair.second->getParent(0);
+        leaf->addCullCallback(new SortByDepth);
+    }
 
     _winds.resize(sgc.getInt("wind.count"));
-    root->addUpdateCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
-        for (auto i = 0; i < _winds.size(); ++i)
-        {
-            _winds[i].update(sgg.getDeltaTime());
-            _winds[i].updateUniform(*ss, i);
-        }
-    }));
-
-    _sceneRoot->addChild(root);
+    _sceneRoot->addUpdateCallback(
+        osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+            for (auto i = 0; i < _winds.size(); ++i)
+            {
+                _winds[i].update(sgg.getDeltaTime());
+                _winds[i].updateUniform(*ss, i);
+            }
+        }));
 }
 
 class MoleSpawner : public osg::Callback
