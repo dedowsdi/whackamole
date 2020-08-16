@@ -1394,9 +1394,13 @@ void Game::createMeadow()
     }
 
     auto addGrass = [&](const osg::Vec2& p) {
-        int i = (p.x() - _terrainOrigin.x()) / groupSize;
-        int j = (p.y() - _terrainOrigin.y()) / groupSize;
+        // compute group index, if p is on group right or top edge, use p - 1
+        auto fi = (p.x() - _terrainOrigin.x()) / groupSize;
+        auto fj = (p.y() - _terrainOrigin.y()) / groupSize;
+        int i = fi == std::floor(fi) ? fi - 1 : fi;
+        int j = fj == std::floor(fj) ? fj - 1 : fj;
         int idx = j * numGroups + i;
+
         auto it = meadowMap.find(idx);
         assert(it != meadowMap.end());
         auto geom = it->second;
