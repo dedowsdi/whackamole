@@ -673,6 +673,25 @@ void addConstantComputeBoundingSphereCallback(osg::Node& d, const osg::BoundingS
         static_cast<osg::Node::ComputeBoundingSphereCallback*>(cbsCallback));
 }
 
+namespace detail
+{
+class CameraDrawCallback : public osg::Camera::DrawCallback
+{
+public:
+    CameraDrawCallback(CameraDrawCallbackFunction func) : _func(func) {}
+
+    void operator()(osg::RenderInfo& renderInfo) const override { _func(renderInfo); }
+
+private:
+    CameraDrawCallbackFunction _func;
+};
+}
+
+void* createCameraDrawCallback(CameraDrawCallbackFunction func)
+{
+    return new detail::CameraDrawCallback(func);
+}
+
 osg::Geometry* createTearDrop(float radius, float xyScale, int stacks, int slices)
 {
     auto geom = new osg::Geometry;

@@ -1,6 +1,6 @@
 #version 120
 
-uniform float tiling = 0.5;
+uniform float tiling = 2;
 
 varying vec3 vertex;
 

@@ -228,6 +228,10 @@ void* createComputeBoundingSphereCallback(ComputeBoundingSphereCallbackFunction 
 
 void addConstantComputeBoundingSphereCallback(osg::Node& d, const osg::BoundingSphere& bb);
 
+using CameraDrawCallbackFunction = std::function<void(osg::RenderInfo&)>;
+// func:  void(osg::RenderInfo&);
+void* createCameraDrawCallback(CameraDrawCallbackFunction func);
+
 // Program {{{1
 
 osg::Program* createProgram(const std::string& fragFile);

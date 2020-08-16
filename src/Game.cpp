@@ -1087,6 +1087,8 @@ void Game::createPool()
         _reflectRttCamera->addChild(_sceneRoot);
     }
 
+    auto refractProjectionUniform =
+        new osg::Uniform("refract_projection_matrix", osg::Matrixf());
     // refract{
     {
         _refractMap = osgf::createTexture2D(GL_RGBA, 1, 1, osg::Texture::LINEAR,
@@ -1125,6 +1127,14 @@ void Game::createPool()
         ss->setDefine("SHADOWED_SCENE", "0");
 
         _refractRttCamera->addChild(_sceneRoot);
+
+        // refract camera projection matrix might be different from main camera.
+        auto callback = osgf::createCameraDrawCallback([=](osg::RenderInfo& ri) {
+            const osg::Matrix& matrix = ri.getState()->getProjectionMatrix();
+            refractProjectionUniform->set(matrix);
+        });
+        _refractRttCamera->setPostDrawCallback(
+            static_cast<osg::Camera::DrawCallback*>(callback));
     }
 
     // add pool. The pool it self should only be rended by main camera.
@@ -1172,6 +1182,7 @@ void Game::createPool()
     ss->addUniform(new osg::Uniform("dudv_map", 4));
     ss->addUniform(new osg::Uniform("normal_map", 5));
     ss->addUniform(new osg::Uniform("osgShadow_ambientBias", osg::Vec2(0.6, 0.4)));
+    ss->addUniform(refractProjectionUniform);
 
     auto material = new osg::Material;
     material->setSpecular(osg::Material::FRONT_AND_BACK, osg::Vec4(0.6, 0.6, 0.6, 1));
@@ -1483,7 +1494,10 @@ void Game::createMeadow()
         // Fill the blank area between the circle and other grasses
         auto p = osg::Vec2(std::cos(angle + stepAngle * 0.5f) * minRadius,
             std::sin(angle + stepAngle * 0.5f) * minRadius);
-        p = clamp(p, origin, -origin);
+        if (p != clamp(p, origin, -origin))
+        {
+            continue;
+        }
         addGrass(p);
     }
 
