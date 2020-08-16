@@ -1414,8 +1414,12 @@ void Game::createMeadow()
         // compute group index, if p is on group right or top edge, use p - 1
         auto fi = (p.x() - _terrainOrigin.x()) / groupSize;
         auto fj = (p.y() - _terrainOrigin.y()) / groupSize;
-        int i = fi == std::floor(fi) ? fi - 1 : fi;
-        int j = fj == std::floor(fj) ? fj - 1 : fj;
+        int i = fi;
+        int j = fj;
+        if (i > 0 && fi == std::floor(fi))
+            --i;
+        if (j > 0 && fj == std::floor(fj))
+            --j;
         int idx = j * numGroups + i;
 
         auto it = meadowMap.find(idx);
@@ -1477,8 +1481,10 @@ void Game::createMeadow()
         addGrass(osg::Vec2(std::cos(angle) * r, std::sin(angle) * r));
 
         // Fill the blank area between the circle and other grasses
-        addGrass(osg::Vec2(std::cos(angle + stepAngle * 0.5f) * minRadius,
-            std::sin(angle + stepAngle * 0.5f) * minRadius));
+        auto p = osg::Vec2(std::cos(angle + stepAngle * 0.5f) * minRadius,
+            std::sin(angle + stepAngle * 0.5f) * minRadius);
+        p = clamp(p, origin, -origin);
+        addGrass(p);
     }
 
     // create PrimitiveSet for each meadow
