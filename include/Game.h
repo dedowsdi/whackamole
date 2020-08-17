@@ -224,6 +224,10 @@ private:
 
     void createTrees();
 
+    void createRocks();
+
+    void createBirds();
+
     void createMeadow();
 
     void createBurrows();
@@ -254,6 +258,8 @@ private:
     float _totalTime = 30;
 
     float _sceneRadius = 128;
+    float _poolRadius = 256;
+    float _poolRadius2 = 66636;
     float _sceneHeight = 128;
     float _popRate = 0.002;
 
@@ -298,6 +304,8 @@ private:
     osg::ref_ptr<osg::Group> _starfield;
     osg::ref_ptr<osg::StateSet> _meteorStateSet;
     osg::ref_ptr<osg::Texture3D> _noiseTexture3D;
+
+    std::vector<osg::ref_ptr<osg::Node>> _rocks;
 
     std::vector<osg::Vec4> _explosions;
     std::vector<Wind> _winds;

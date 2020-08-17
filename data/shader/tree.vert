@@ -13,7 +13,6 @@ uniform vec4 wind_size = vec4(500, 150, 75, 0.5);
 // force_scale, variant_scale
 uniform vec3 wind_power = vec3(2, 4, 0.25);
 
-varying vec3 normal;
 varying vec3 vertex;
 varying mat3 tbn_matrix;
 

@@ -614,6 +614,8 @@ void Game::restart()
 
     // cache some frequently used settings
     _sceneHeight = sgc.getFloat("scene.height");
+    _poolRadius = sgc.getFloat("pool.radius");
+    _poolRadius2 = _poolRadius * _poolRadius;
     _popRate = sgc.getFloat("mole.popRate");
 
     createLights();
@@ -637,6 +639,9 @@ void Game::restart()
 
     if (sgc.getBool("scene.meadow"))
         createMeadow();
+
+    if (sgc.getBool("scene.rocks"))
+        createRocks();
 
     createBurrows();
 
@@ -1269,14 +1274,11 @@ void Game::createTrees()
     leafStateSet->addUniform(new osg::Uniform("normal_map", 1));
 
     // generate trees
-    auto poolRadius = sgc.getFloat("pool.radius");
-    auto poolRadius2 = poolRadius * poolRadius;
-
     auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
         osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("tree.interval"), 32);
     for (auto& p: points)
     {
-        if (p.length2() < poolRadius2)
+        if (p.length2() < _poolRadius2)
         {
             continue;
         }
@@ -1287,6 +1289,8 @@ void Game::createTrees()
         frame->addChild(tree);
         root->addChild(frame);
     }
+
+    OSG_NOTICE << "Add " << root->getNumChildren() << " trees" << std::endl;
 
     // apply winds
     auto windSize = sgc.getVec4("tree.wind.size");
@@ -1304,6 +1308,82 @@ void Game::createTrees()
         windSizeUniform->set(osg::Vec4(windSize.x(),
             windSize.y() * meanStrength / maxStrength, windSize.z(), windSize.w()));
     }));
+}
+
+void Game::createRocks()
+{
+    if (_rocks.empty())
+    {
+        auto prg = sgg.createProgram("shader/rock.vert", "shader/rock.frag");
+
+        auto& rocks = dynamic_cast<osg::Group&>(*osgDB::readNodeFile("model/rocks.osgt"));
+        osg::ref_ptr<osgUtil::TangentSpaceGenerator> tsg = new osgUtil::TangentSpaceGenerator;
+
+        for (auto i = 0; i < rocks.getNumChildren(); ++i)
+        {
+            auto& leaf = dynamic_cast<osg::Geode&>(*rocks.getChild(i));
+            auto& geom = dynamic_cast<osg::Geometry&>(*leaf.getChild(0));
+            geom.setName("Rock");
+            tsg->generate(&geom);
+            geom.setTexCoordArray(1, tsg->getTangentArray());
+
+            // shift center to bottom center
+            auto frame = new osg::MatrixTransform;
+            auto& bs = leaf.getBoundingBox();
+            frame->setMatrix(osg::Matrix::translate(
+                -bs.center() + osg::Vec3(0, 0, (bs.zMax() - bs.zMin()) * 0.5f - 0.1f)));
+            frame->addChild(&geom);
+
+            auto ss = frame->getOrCreateStateSet();
+
+            auto albedoImage = "texture/" + leaf.getName().substr(0, 2) + "_rock_albedo.jpeg";
+            auto normalImage = "texture/" + leaf.getName().substr(0, 2) + "_rock_normals.jpeg";
+            auto albedoTexture = new osg::Texture2D(osgDB::readImageFile(albedoImage));
+            auto normalTexture = new osg::Texture2D(osgDB::readImageFile(normalImage));
+            ss->setTextureAttributeAndModes(0, albedoTexture);
+            ss->setTextureAttributeAndModes(2, normalTexture);
+            ss->setAttributeAndModes(prg);
+            ss->addUniform(new osg::Uniform("diffuse_map", 0));
+            ss->addUniform(new osg::Uniform("normal_map", 2));
+            ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+
+            _rocks.push_back(frame);
+        }
+    }
+
+    auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
+        osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("rock.interval"), 32);
+    auto radiusGauss = sgc.getVec2("rock.radius.gauss");
+
+    auto count = 0;
+    for (auto& p : points)
+    {
+        if (p.length2() < _poolRadius2)
+        {
+            continue;
+        }
+
+        auto radius = std::max(1.0f, gaussRand(radiusGauss));
+        auto rock = _rocks[rand() % _rocks.size()];
+        auto scale = radius / rock->getBound().radius();
+        auto tp = getTerrainPoint(p.x(), p.y());
+        osg::Matrix m = osg::Matrix::translate(tp);
+        m.preMultScale(osg::Vec3(scale, scale, scale));
+
+        auto frame = new osg::MatrixTransform;
+        frame->setMatrix(m);
+        frame->addChild(rock);
+        frame->setNodeMask(nb_above_waterline | nb_cast_shadow);
+
+        _sceneRoot->addChild(frame);
+        ++count;
+    }
+
+    OSG_NOTICE << "Create " << count << " rocks" << std::endl;
+}
+
+void Game::createBirds()
+{
 }
 
 class SortByDepth : public osg::Callback
@@ -1442,7 +1522,6 @@ void Game::createMeadow()
 
     // create grass points
     auto grassSize = sgc.getFloat("meadow.grass.size");
-    auto poolRadius = sgc.getFloat("pool.radius");
     auto origin = osg::Vec2(-_sceneRadius, -_sceneRadius);
     auto step = sgc.getFloat("meadow.grass.step") * grassSize;
 
@@ -1450,7 +1529,7 @@ void Game::createMeadow()
     int rows = _sceneRadius * 2 / step;
 
     auto pos = osg::Vec2(-step * 0.5f, 0.0f);
-    auto minRadius = poolRadius + 0.5 * grassSize;
+    auto minRadius = _poolRadius + 0.5 * grassSize;
     auto minRadius2 = minRadius * minRadius;
 
     for (auto i = 0; i < cols; ++i)
@@ -1481,10 +1560,10 @@ void Game::createMeadow()
     }
 
     // create a circle around pool, user should not see *
-    auto stepAngle = step / poolRadius;
+    auto stepAngle = step / _poolRadius;
     int stepCount = std::ceil(osg::PIf * 2 / stepAngle);
     stepAngle = osg::PIf * 2 / stepCount;
-    auto r = poolRadius * 0.999f;  // slightly smaller then radius, it's used as condition
+    auto r = _poolRadius * 0.999f;  // slightly smaller then radius, it's used as condition
                                    // check in geom shader
     for (auto i = 0; i < stepCount; ++i)
     {
@@ -1539,7 +1618,7 @@ void Game::createMeadow()
     auto explosionRadius = sgc.getInt("lightning.explosionRadius");
     ss->addUniform(new osg::Uniform("size", grassSize));
     ss->addUniform(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "explosions", maxExplosions));
-    ss->addUniform(new osg::Uniform("pool_radius", poolRadius));
+    ss->addUniform(new osg::Uniform("pool_radius", _poolRadius));
     ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
     ss->setDefine("EXPLOSION_RADIUS", std::to_string(explosionRadius));
 
@@ -1614,7 +1693,7 @@ void Game::createBurrows()
     _burrowList.clear();
 
     auto burrowRadius = sgc.getFloat("burrow.radius");
-    auto spawnRadius = sgc.getFloat("burrow.spawnRadius") * _sceneRadius;
+    auto spawnRadius = sgc.getFloat("burrow.spawnRadius");
     auto spawnInterval = sgc.getFloat("burrow.spawnInterval");
     auto points = poissonDiskSample(osg::Vec2(-spawnRadius, -spawnRadius),
         osg::Vec2(spawnRadius, spawnRadius), spawnInterval, 32);
