@@ -878,8 +878,8 @@ void Game::resetUI()
     _scoreText->setText("0");
 
     hide(_msg);
-    _timer = 60;
-    _totalTime = 60;
+    _timer = sgc.getFloat("game.duration");
+    _totalTime = _timer;
     _timerText->setText(std::to_string(_timer));
 
     _scoreText->setNodeMask(nb_ui);
@@ -982,7 +982,8 @@ void Game::createTerrain()
 
     auto ss = _terrain->getOrCreateStateSet();
     auto material = new osg::Material;
-    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.75, 0.75, 0.75, 1));
+    material->setDiffuse(osg::Material::FRONT_AND_BACK, osg::Vec4(0.9, 0.9, 0.9, 1));
+    material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4(0.9, 0.9, 0.9, 1));
     ss->setAttributeAndModes(material);
     _sceneRoot->addChild(_terrain);
 

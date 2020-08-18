@@ -3,8 +3,8 @@
 varying vec3 pos;
 
 uniform sampler3D noise_map;
-uniform vec4 waterline_color = vec4(0, 0, 0, 0);
-uniform vec4 sky_color = vec4(0.00, 0.0, 0.15, 0);
+uniform vec4 sky_color = vec4(0.15, 0, 0, 0);
+uniform vec4 waterline_color = vec4(0.15, 0.15, 0.3, 0);
 uniform vec4 cloud_color = vec4(1, 1, 1, 1);
 uniform vec3 moon = vec3(0, 0, 1);
 uniform float osg_SimulationTime;
@@ -38,7 +38,7 @@ void main(void)
     a *= f;
 
     // sky gradient
-    float b =  1 - dot(p, vec3(0, 0, 1));
+    float b = dot(p, vec3(0, 0, 1));
     b = smoothstep(0, 1, b);
     vec4 gradient = mix(waterline_color, sky_color, b);
 

@@ -11,7 +11,7 @@ uniform sampler2D dudv_map;
 uniform sampler2D normal_map;
 
 uniform vec2 render_target_size;
-uniform float wave_strength = 0.02;
+uniform float wave_strength = 0.015;
 uniform float osg_SimulationTime;
 uniform mat4 refract_projection_matrix;
 
@@ -67,7 +67,7 @@ void main(void)
     // fresnel effect, use fixed normal
     vec3 n = normalize(normal);
     vec3 v = normalize(-vertex);
-    float fresnel = clamp(dot(n, v), 0.2, 0.8);
+    float fresnel = clamp(dot(n, v), 0.1, 0.9);
     vec4 color = clamp(mix(reflect_color, refract_color, pow(fresnel, 1)), 0, 1);
 
     // specular, use normal map normal
