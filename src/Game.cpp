@@ -173,14 +173,14 @@ public:
                         break;
 
                     case osgGA::GUIEventAdapter::KEY_T:
-                        {
-                            auto ghostManipulator = dynamic_cast<GhostManipulator*>(
-                                sgg.getManipulator()->getMatrixManipulatorWithIndex(1));
-                            auto eye = ghostManipulator->getEye();
-                            OSG_NOTICE << eye  << std::endl;
-                            OSG_NOTICE << osg::Vec2(eye.x(), eye.y()).length() << std::endl;
-                        }
-                        break;
+                    {
+                        auto ghostManipulator = dynamic_cast<GhostManipulator*>(
+                            sgg.getManipulator()->getMatrixManipulatorWithIndex(1));
+                        auto eye = ghostManipulator->getEye();
+                        OSG_NOTICE << eye << std::endl;
+                        OSG_NOTICE << osg::Vec2(eye.x(), eye.y()).length() << std::endl;
+                    }
+                    break;
 
                     default:
                         break;
@@ -652,6 +652,9 @@ void Game::restart()
 
     if (sgc.getBool("scene.rocks"))
         createRocks();
+
+    if (sgc.getBool("scene.birds"))
+        createBirds();
 
     createBurrows();
 
@@ -1394,7 +1397,52 @@ void Game::createRocks()
     OSG_NOTICE << "Create " << count << " rocks" << std::endl;
 }
 
-void Game::createBirds() {}
+void Game::createBirds()
+{
+    auto node = osgDB::readNodeFile("model/eagle.osgt");
+    auto radius = sgc.getFloat("bird.radius");
+    auto scale = radius / node->getBound().radius();
+
+    auto bird = new osg::MatrixTransform;
+    bird->addChild(node);
+    osg::Matrix m = osg::Matrix::translate(-node->getBound().center());
+    m.postMultScale(osg::Vec3(scale, scale, scale));
+    bird->setMatrix(m);
+
+    auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
+        osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("bird.interval"), 32);
+    auto gaussHeight = sgc.getVec2("bird.height.gauss");
+    auto gaussCircleRadius = sgc.getVec2("bird.circle.radius.gauss");
+    auto gaussSpeed = sgc.getVec2("bird.circle.speed.gauss");
+
+    auto count = 0;
+    for (auto& p: points)
+    {
+        auto frame = new osg::MatrixTransform;
+        frame->setNodeMask(nb_real_object | nb_cast_shadow);
+        auto h = gaussRand(gaussHeight);
+        auto m = osg::Matrix::translate(osg::Vec3(p, h));
+        m.preMultRotate(osg::Quat(unitRand() * osg::PIf * 2.0f, osg::Z_AXIS));
+        frame->setMatrix(m);
+
+        auto ss = frame->getOrCreateStateSet();
+        ss->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON);
+
+        _sceneRoot->addChild(frame);
+
+        auto animFrame = new osg::MatrixTransform;
+        animFrame->addChild(bird);
+        auto circleRadius = std::max(gaussRand(gaussCircleRadius), 10.0f);
+        auto pivot = osg::Vec3(circleRadius, 0, 0);
+        auto angularSpeed = std::max(gaussRand(gaussSpeed), 10.0f) / circleRadius;
+        auto apcb = new osg::AnimationPathCallback(pivot, osg::Z_AXIS, angularSpeed);
+        animFrame->addUpdateCallback(apcb);
+        frame->addChild(animFrame);
+
+        ++count;
+    }
+    OSG_NOTICE << "Create " << count << " birds" << std::endl;
+}
 
 class SortByDepth : public osg::Callback
 {
