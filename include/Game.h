@@ -209,6 +209,8 @@ public:
 
     float getSceneRadius() const { return _sceneRadius; }
 
+    osgGA::KeySwitchMatrixManipulator* getManipulator() const { return _manipulator; }
+
 private:
     Game();
 

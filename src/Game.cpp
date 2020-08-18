@@ -172,6 +172,16 @@ public:
                         sgg.restart();
                         break;
 
+                    case osgGA::GUIEventAdapter::KEY_T:
+                        {
+                            auto ghostManipulator = dynamic_cast<GhostManipulator*>(
+                                sgg.getManipulator()->getMatrixManipulatorWithIndex(1));
+                            auto eye = ghostManipulator->getEye();
+                            OSG_NOTICE << eye  << std::endl;
+                            OSG_NOTICE << osg::Vec2(eye.x(), eye.y()).length() << std::endl;
+                        }
+                        break;
+
                     default:
                         break;
                 }
@@ -890,8 +900,6 @@ void Game::createTerrain()
     // HeightField::getNormal will break
     auto tileRows = sgc.getInt("terrain.tile.rows");
     auto tileCols = sgc.getInt("terrain.tile.cols");
-    auto xInterval = _tileSize / tileCols;
-    auto yInterval = _tileSize / tileRows;
     auto origin = osg::Vec2(-_tileSize * _tileCount * 0.5f, -_tileSize * _tileCount * 0.5f);
     _terrainOrigin = origin;
     _sceneRadius = -origin.x();
@@ -901,7 +909,6 @@ void Game::createTerrain()
     // Perlin noise used fixed seed 30757, we random the start coordinates to random the
     // terrain.
     auto startCoord = osg::Vec2(linearRand(-100.0f, 100.0f), linearRand(-100.0f, 100.0f));
-    auto poolRadius = sgc.getFloat("pool.radius");
     auto poolBottomRadius = sgc.getFloat("pool.bottomRadius");
     auto poolDepth = sgc.getFloat("pool.depth");
 
@@ -916,31 +923,32 @@ void Game::createTerrain()
             // populate HeightField
             auto heightField = new osg::HeightField;
             heightField->allocate(tileRows, tileCols);
-            heightField->setXInterval(xInterval);
-            heightField->setYInterval(yInterval);
+            heightField->setXInterval(_tileSize / (tileCols - 1));
+            heightField->setYInterval(_tileSize / (tileRows - 1));
             heightField->setOrigin(
                 osg::Vec3(_tileSize * i + origin.x(), _tileSize * j + origin.y(), 0));
 
             auto tileCoord = startCoord + osg::Vec2(xStep * (tileCols - 1) * i,
                                               yStep * (tileRows - 1) * j);
             auto coord = tileCoord - osg::Vec2(xStep, yStep);
-            for (int y = 0; y < tileRows; ++y)
+            for (int x = 0; x < tileCols; ++x)
             {
-                coord[1] += yStep;
-                coord[0] = tileCoord.x();
+                coord[0] += xStep;
+                coord[1] = tileCoord.y() - yStep;
 
-                for (int x = 0; x < tileCols; ++x)
+                for (int y = 0; y < tileRows; ++y)
                 {
-                    coord[0] += xStep;
+                    coord[1] += yStep;
                     auto h = pn.PerlinNoise2D(coord[0], coord[1], 2, 2, 3) * _sceneHeight;
 
                     // dig pool
                     auto vertex = heightField->getVertex(x, y);
                     auto l = osg::Vec2(vertex.x(), vertex.y()).length();
-                    if (l < poolRadius)
+
+                    if (l <= _poolRadius)
                     {
                         h -= mix(0.0f, poolDepth,
-                            1.0f - smoothstep(poolBottomRadius, poolRadius, l));
+                            1.0f - smoothstep(poolBottomRadius, _poolRadius, l));
                     }
 
                     heightField->setHeight(x, y, h);
@@ -1317,7 +1325,8 @@ void Game::createRocks()
         auto prg = sgg.createProgram("shader/rock.vert", "shader/rock.frag");
 
         auto& rocks = dynamic_cast<osg::Group&>(*osgDB::readNodeFile("model/rocks.osgt"));
-        osg::ref_ptr<osgUtil::TangentSpaceGenerator> tsg = new osgUtil::TangentSpaceGenerator;
+        osg::ref_ptr<osgUtil::TangentSpaceGenerator> tsg =
+            new osgUtil::TangentSpaceGenerator;
 
         for (auto i = 0; i < rocks.getNumChildren(); ++i)
         {
@@ -1336,8 +1345,10 @@ void Game::createRocks()
 
             auto ss = frame->getOrCreateStateSet();
 
-            auto albedoImage = "texture/" + leaf.getName().substr(0, 2) + "_rock_albedo.jpeg";
-            auto normalImage = "texture/" + leaf.getName().substr(0, 2) + "_rock_normals.jpeg";
+            auto albedoImage =
+                "texture/" + leaf.getName().substr(0, 2) + "_rock_albedo.jpeg";
+            auto normalImage =
+                "texture/" + leaf.getName().substr(0, 2) + "_rock_normals.jpeg";
             auto albedoTexture = new osg::Texture2D(osgDB::readImageFile(albedoImage));
             auto normalTexture = new osg::Texture2D(osgDB::readImageFile(normalImage));
             ss->setTextureAttributeAndModes(0, albedoTexture);
@@ -1345,7 +1356,8 @@ void Game::createRocks()
             ss->setAttributeAndModes(prg);
             ss->addUniform(new osg::Uniform("diffuse_map", 0));
             ss->addUniform(new osg::Uniform("normal_map", 2));
-            ss->setMode(GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+            ss->setMode(
+                GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
 
             _rocks.push_back(frame);
         }
@@ -1356,7 +1368,7 @@ void Game::createRocks()
     auto radiusGauss = sgc.getVec2("rock.radius.gauss");
 
     auto count = 0;
-    for (auto& p : points)
+    for (auto& p: points)
     {
         if (p.length2() < _poolRadius2)
         {
@@ -1382,9 +1394,7 @@ void Game::createRocks()
     OSG_NOTICE << "Create " << count << " rocks" << std::endl;
 }
 
-void Game::createBirds()
-{
-}
+void Game::createBirds() {}
 
 class SortByDepth : public osg::Callback
 {
@@ -1429,6 +1439,7 @@ public:
         // no dirty bound and gl object
         return traverse(object, data);
     }
+
 private:
     float _maxDistance = 1024;
     int _sortFrames = 8;
@@ -1564,7 +1575,7 @@ void Game::createMeadow()
     int stepCount = std::ceil(osg::PIf * 2 / stepAngle);
     stepAngle = osg::PIf * 2 / stepCount;
     auto r = _poolRadius * 0.999f;  // slightly smaller then radius, it's used as condition
-                                   // check in geom shader
+                                    // check in geom shader
     for (auto i = 0; i < stepCount; ++i)
     {
         auto angle = stepAngle * i;
