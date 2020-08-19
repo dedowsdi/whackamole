@@ -54,6 +54,7 @@
 #include <Resource.h>
 #include <ToyMath.h>
 #include <ToyShadowMap.h>
+#include <LODVisitor.h>
 
 namespace toy
 {
@@ -623,10 +624,13 @@ void Game::restart()
         resetUI();
 
     // cache some frequently used settings
+    _lod = sgc.getBool("scene.lod");
     _sceneHeight = sgc.getFloat("scene.height");
     _poolRadius = sgc.getFloat("pool.radius");
     _poolRadius2 = _poolRadius * _poolRadius;
     _popRate = sgc.getFloat("mole.popRate");
+    _lodVisitor = new LODVisitor(
+        sgc.getFloats("scene.lod.distances"), sgc.getFloats("scene.lod.sampleRatios"));
 
     createLights();
 
@@ -1287,6 +1291,11 @@ void Game::createTrees()
     leafStateSet->addUniform(new osg::Uniform("diffuse_map", 0));
     leafStateSet->addUniform(new osg::Uniform("normal_map", 1));
 
+    if (_lod)
+    {
+        tree = _lodVisitor->filter(*tree);
+    }
+
     // generate trees
     auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
         osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("tree.interval"), 32);
@@ -1369,6 +1378,14 @@ void Game::createRocks()
         }
     }
 
+    if (_lod)
+    {
+        for (auto i = 0; i < _rocks.size(); ++i)
+        {
+            _rocks[i] = _lodVisitor->filter(*_rocks[i]);
+        }
+    }
+
     auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
         osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("rock.interval"), 32);
     auto radiusGauss = sgc.getVec2("rock.radius.gauss");
@@ -1402,15 +1419,12 @@ void Game::createRocks()
 
 void Game::createBirds()
 {
-    auto node = osgDB::readNodeFile("model/eagle.osgt");
-    auto radius = sgc.getFloat("bird.radius");
-    auto scale = radius / node->getBound().radius();
+    auto bird = osgf::readNodeFile("model/eagle.osgt", sgc.getFloat("bird.radius"));
 
-    auto bird = new osg::MatrixTransform;
-    bird->addChild(node);
-    osg::Matrix m = osg::Matrix::translate(-node->getBound().center());
-    m.postMultScale(osg::Vec3(scale, scale, scale));
-    bird->setMatrix(m);
+    if (_lod)
+    {
+        bird = _lodVisitor->filter(*bird);
+    }
 
     auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
         osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("bird.interval"), 32);

@@ -55,6 +55,7 @@ set(SRC
     src/DebugHandler.cpp
     src/Game.cpp
     src/GhostManipulator.cpp
+    src/LODVisitor.cpp
     src/Lightning.cpp
     src/OsgFactory.cpp
     src/OsgQuery.cpp

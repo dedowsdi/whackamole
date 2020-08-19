@@ -3,7 +3,6 @@
 #include <iomanip>
 #include <sstream>
 
-#include <osg/io_utils>
 #include <osg/os_utils>
 #include <osgDB/Registry>
 #include <ToyMath.h>
@@ -55,7 +54,7 @@ void Config::reload()
 
 void Config::clear() {}
 
-inline std::istream& operator>>(std::istream& input, osg::Matrixf& m)
+std::istream& operator>>(std::istream& input, osg::Matrixf& m)
 {
     for (auto row = 0; row < 4; ++row)
     {
@@ -69,7 +68,7 @@ inline std::istream& operator>>(std::istream& input, osg::Matrixf& m)
     return input;
 }
 
-inline std::istream& operator>>(std::istream& input, osg::Matrixd& m)
+std::istream& operator>>(std::istream& input, osg::Matrixd& m)
 {
     for (auto row = 0; row < 4; ++row)
     {
@@ -81,29 +80,6 @@ inline std::istream& operator>>(std::istream& input, osg::Matrixd& m)
         }
     }
     return input;
-}
-
-template<typename T>
-T Config::get(const std::string& key)
-{
-    auto iter = _dict.find(key);
-    if (iter == _dict.end())
-    {
-        OSG_NOTICE << key << " not found." << std::endl;
-        return T();
-    }
-
-    T t;
-    std::istringstream iss(iter->second);
-    iss >> t;
-
-    if (!iss)
-    {
-        OSG_WARN << "Failed to convert " << key << "\n";
-        return T();
-    }
-
-    return t;
 }
 
 osg::Vec4 Config::getColor(const std::string& key)
@@ -121,24 +97,5 @@ Config::Config()
 {
     reload();
 }
-
-#define INSTANTIATE_get(T) template T Config::get(const std::string& key);
-
-INSTANTIATE_get(bool);
-INSTANTIATE_get(char);
-INSTANTIATE_get(short);
-INSTANTIATE_get(int);
-INSTANTIATE_get(unsigned char);
-INSTANTIATE_get(unsigned short);
-INSTANTIATE_get(unsigned);
-INSTANTIATE_get(float);
-INSTANTIATE_get(double);
-INSTANTIATE_get(osg::Vec2s);
-INSTANTIATE_get(osg::Vec2);
-INSTANTIATE_get(osg::Vec3);
-INSTANTIATE_get(osg::Vec4);
-INSTANTIATE_get(osg::Matrixf);
-INSTANTIATE_get(osg::Matrixd);
-INSTANTIATE_get(std::string);
 
 }  // namespace toy

@@ -13,6 +13,7 @@ namespace osg
 class MatrixTransform;
 class HeightField;
 class Texture3D;
+class LOD;
 }  // namespace osg
 
 namespace osgTerrain
@@ -42,6 +43,7 @@ namespace toy
 {
 
 class ToyShadowMap;
+class LODVisitor;
 
 struct Burrow
 {
@@ -259,11 +261,14 @@ private:
     float _timer = 30;
     float _totalTime = 30;
 
+    bool _lod = true;
     float _sceneRadius = 128;
     float _poolRadius = 256;
     float _poolRadius2 = 66636;
     float _sceneHeight = 128;
     float _popRate = 0.002;
+
+    osg::ref_ptr<LODVisitor> _lodVisitor;
 
     osg::ref_ptr<osgShadow::ShadowedScene> _shadowedScene;
     osg::ref_ptr<ToyShadowMap> _shadowMap;
