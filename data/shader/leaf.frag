@@ -1,6 +1,6 @@
 #version 120
 
-#define PI 3.1415926535897932384626433832795
+#pragma import_defines(CAST_SHADOW)
 
 uniform sampler2D diffuse_map;
 uniform sampler2D normal_map;
@@ -15,6 +15,11 @@ void main(void)
     {
         discard;
     }
+
+#ifdef CAST_SHADOW
+    gl_FragColor = vec4(1);
+    return;
+#endif
 
     vec3 n = texture2D(normal_map, gl_TexCoord[0].xy).xyz * 2 - 1;
     n = normalize(gl_NormalMatrix * tbn_matrix * n);

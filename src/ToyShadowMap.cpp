@@ -4,6 +4,7 @@
 #include <osg/ComputeBoundsVisitor>
 
 #include <Config.h>
+#include <Game.h>
 
 #define IMPROVE_TEXGEN_PRECISION 1
 
@@ -212,6 +213,14 @@ void ToyShadowMap::init()
     _stateset->setDefine("SHADOWED_SCENE", "1");
     _stateset->addUniform(
         new osg::Uniform("shadow_resolution", sgc.getVec2("scene.shadow.texture.size")));
+
+    // override cast shadow program. If you need to customize it, you must use PROTECTED
+    // for your program.
+    auto cameraStateSet = _camera->getOrCreateStateSet();
+    auto castShadow = sgg.createProgram("shader/cast_shadow.vert", "shader/cast_shadow.frag");
+    cameraStateSet->setAttributeAndModes(
+        castShadow, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+    cameraStateSet->setDefine("CAST_SHADOW");
 }
 
 }  // namespace toy

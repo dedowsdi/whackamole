@@ -1261,7 +1261,8 @@ void Game::createTrees()
     trunkStateSet->setMode(
         GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
     trunkStateSet->setAttributeAndModes(
-        sgg.createProgram("shader/tree.vert", "shader/trunk.frag"));
+        sgg.createProgram("shader/tree.vert", "shader/trunk.frag"),
+        osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
     auto trunkNormalMap = new osg::Texture2D(osgDB::readImageFile("texture/bark07_n.png"));
     trunkNormalMap->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
     trunkNormalMap->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
@@ -1273,7 +1274,8 @@ void Game::createTrees()
     leafStateSet->setMode(
         GL_CULL_FACE, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
     leafStateSet->setAttributeAndModes(
-        sgg.createProgram("shader/tree.vert", "shader/leaf.frag"));
+        sgg.createProgram("shader/tree.vert", "shader/leaf.frag"),
+        osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
     leafStateSet->setDefine("FLUTTER");
     leafStateSet->addUniform(new osg::Uniform("diffuse_map", 0));
     leafStateSet->addUniform(new osg::Uniform("normal_map", 1));

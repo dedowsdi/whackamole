@@ -3,6 +3,7 @@
 // adapted from http://www.evolved-software.com/shaders/lighting
 
 #pragma import_defines(FLUTTER)
+#pragma import_defines(CAST_SHADOW)
 
 uniform float osg_SimulationTime;
 
@@ -56,11 +57,12 @@ void main(void)
 {
     vec3 pos = gl_Vertex.xyz + applyWind(gl_Vertex.xyz / gl_Vertex.w);
     vertex = (gl_ModelViewMatrix * vec4(pos, 1)).xyz;
-
     gl_Position = gl_ProjectionMatrix * vec4(vertex, 1);
     gl_TexCoord[0] = gl_MultiTexCoord0;
 
+#ifndef CAST_SHADOW
     vec3 tangent = gl_MultiTexCoord1.xyz;
     vec3 bitangent = cross(gl_Normal, tangent);
     tbn_matrix = mat3(tangent, bitangent, gl_Normal);
+#endif
 }
