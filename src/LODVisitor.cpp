@@ -26,6 +26,9 @@ void LODVisitor::apply(osg::Geometry& node)
 
 
     auto lod = new osg::LOD;
+    lod->setName(node.getName() + "LOD");
+    lod->setNodeMask(node.getNodeMask());
+
     if (_distances.empty())
     {
         lod->addChild(&node, 0, FLT_MAX);

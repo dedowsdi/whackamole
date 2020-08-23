@@ -29,6 +29,7 @@ class Vec3d;
 class MatrixTransform;
 class AnimationPath;
 class Shader;
+class NodeVisitor;
 
 template<class T>
 class ref_ptr;
@@ -203,6 +204,10 @@ osg::Geometry* createCircleLines(const osg::Vec3& origin, const osg::Vec3& point
 using CallbackFunction = std::function<void(osg::Object*, osg::Object*)>;
 
 osg::Callback* createCallback(CallbackFunction callback);
+
+using StateSetCallbackFunction = std::function<void(osg::StateSet*, osg::NodeVisitor*)>;
+
+void* createStateSetCallback(StateSetCallbackFunction func);
 
 // execute call back after certain time, once only, removed immediately after that.
 osg::Callback* createTimerUpdateCallback(double time, CallbackFunction callback);

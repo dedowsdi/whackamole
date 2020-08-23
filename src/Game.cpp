@@ -646,6 +646,8 @@ void Game::restart()
 
     createTerrain();
 
+    divideSceneByTile();
+
     if (sgc.getBool("scene.pool"))
         createPool();
 
@@ -661,7 +663,8 @@ void Game::restart()
     if (sgc.getBool("scene.birds"))
         createBirds();
 
-    createBurrows();
+    if (sgc.getBool("scene.burrows"))
+        createBurrows();
 
     setupCameraAndManipulator();
 
@@ -782,6 +785,21 @@ void Game::flashCursor(bool v)
 void Game::hide(osg::Node* node)
 {
     node->setNodeMask(0);
+}
+
+void Game::addStaticNode(osg::MatrixTransform* node)
+{
+    auto pos = node->getMatrix().getTrans();
+    int col = (pos.x() - _terrainOrigin.x()) / _tileSize;
+    int row = (pos.y() - _terrainOrigin.y()) / _tileSize;
+    auto idx = row * _tileCount + col;
+    if (idx >= _tileGroups.size())
+    {
+        OSG_WARN << "Can not find static tile group fro " << pos << std::endl;
+        return;
+    }
+
+    _tileGroups[idx]->addChild(node);
 }
 
 osg::Vec3 Game::getTerrainPoint(float x, float y)
@@ -994,6 +1012,26 @@ void Game::createTerrain()
 
     OSG_NOTICE << "Create " << _tileCount << "x" << _tileCount << " terrain tiles"
                << std::endl;
+}
+
+void Game::divideSceneByTile()
+{
+    _tileGroups.clear();
+
+    // divide scene by tile. Note TerrainTile is traversed by
+    // TerrainTechnique, it doesn't traverse children of TerrainTile.
+    for (auto i = 0; i < _tileCount; i++)
+    {
+        for (auto j = 0; j < _tileCount; j++)
+        {
+            auto name = "Group" + std::to_string(i) + ":" + std::to_string(j);
+
+            auto group = new osg::Group;
+            group->setName(name);
+            _sceneRoot->addChild(group);
+            _tileGroups.push_back(group);
+        }
+    }
 }
 
 class FishUpdater : public osg::Callback
@@ -1329,13 +1367,8 @@ void Game::createPool()
 
 void Game::createTrees()
 {
-    auto root = new osg::Group;
-    root->setName("TreeRoot");
-    root->setNodeMask(nb_unreal_object | nb_cast_shadow);
-
-    _sceneRoot->addChild(root);
-
     auto tree = osgDB::readNodeFile("model/spruce.osgt");
+    tree->setNodeMask(nb_unreal_object | nb_cast_shadow);
 
     auto drawables = osgq::searchType<osg::Drawable>(*tree, &osg::Node::asDrawable);
     assert(drawables.size() == 2);
@@ -1391,6 +1424,7 @@ void Game::createTrees()
     // generate trees
     auto points = poissonDiskSample(-osg::Vec2(_sceneRadius, _sceneRadius),
         osg::Vec2(_sceneRadius, _sceneRadius), sgc.getFloat("tree.interval"), 32);
+    auto count = 0;
     for (auto& p: points)
     {
         if (p.length2() < _poolRadius2)
@@ -1402,10 +1436,11 @@ void Game::createTrees()
         m.preMultRotate(osg::Quat(linearRand(0.0f, 2.0f * osg::PIf), osg::Z_AXIS));
         frame->setMatrix(m);
         frame->addChild(tree);
-        root->addChild(frame);
+        addStaticNode(frame);
+        ++count;
     }
 
-    OSG_NOTICE << "Add " << root->getNumChildren() << " trees" << std::endl;
+    OSG_NOTICE << "Add " << count << " trees" << std::endl;
 
     // apply winds
     auto windSize = sgc.getVec4("tree.wind.size");
@@ -1413,16 +1448,21 @@ void Game::createTrees()
     auto windAmplitude = sgc.getVec2("wind.amplitude.gauss");
     auto meanStrength = windSpeed.x() * windAmplitude.x();
     auto windSizeUniform = new osg::Uniform("wind_size", windSize);
-    root->getOrCreateStateSet()->addUniform(windSizeUniform);
-    root->addUpdateCallback(osgf::createCallback([=](auto* obj, auto* data) {
-        auto maxStrength = 0.000001f;
-        for (auto& wind: _winds)
-        {
-            maxStrength = std::max(wind.getSpeed() * wind.getStrength(), maxStrength);
-        }
-        windSizeUniform->set(osg::Vec4(windSize.x(),
-            windSize.y() * meanStrength / maxStrength, windSize.z(), windSize.w()));
-    }));
+    leafStateSet->addUniform(windSizeUniform);
+    trunkStateSet->addUniform(windSizeUniform);
+
+    auto updateWind =
+        osgf::createStateSetCallback([=](osg::StateSet* obj, osg::NodeVisitor* data) {
+            auto maxStrength = 0.000001f;
+            for (auto& wind: _winds)
+            {
+                maxStrength = std::max(wind.getSpeed() * wind.getStrength(), maxStrength);
+            }
+            windSizeUniform->set(osg::Vec4(windSize.x(),
+                windSize.y() * meanStrength / maxStrength, windSize.z(), windSize.w()));
+        });
+    leafStateSet->setUpdateCallback(static_cast<osg::StateSet::Callback*>(updateWind));
+    trunkStateSet->setUpdateCallback(static_cast<osg::StateSet::Callback*>(updateWind));
 }
 
 void Game::createRocks()
@@ -1502,7 +1542,7 @@ void Game::createRocks()
         frame->addChild(rock);
         frame->setNodeMask(nb_above_waterline | nb_cast_shadow);
 
-        _sceneRoot->addChild(frame);
+        addStaticNode(frame);
         ++count;
     }
 

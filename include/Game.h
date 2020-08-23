@@ -201,6 +201,8 @@ public:
 
     void hide(osg::Node* node);
 
+    void addStaticNode(osg::MatrixTransform* node);
+
     // interpolated point
     osg::Vec3 getTerrainPoint(float x, float y);
 
@@ -223,6 +225,8 @@ private:
     void resetUI();
 
     void createTerrain();
+
+    void divideSceneByTile();
 
     void createPool();
 
@@ -296,6 +300,7 @@ private:
     osg::Vec2 _terrainOrigin;
     osg::ref_ptr<osgText::Text> _msg;
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
+    std::vector<osg::Group*> _tileGroups ;
 
     osg::ref_ptr<osg::Geometry> _pool;
     osg::ref_ptr<osg::Texture2D> _reflectMap;

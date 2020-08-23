@@ -491,10 +491,10 @@ osg::Geometry* createCircleLines(
 
 namespace detail
 {
-class FuncCallback : public osg::Callback
+class NodeCallback : public osg::Callback
 {
 public:
-    FuncCallback(CallbackFunction func) : _func(func) {}
+    NodeCallback(CallbackFunction func) : _func(func) {}
 
     bool run(osg::Object* object, osg::Object* data) override
     {
@@ -561,7 +561,30 @@ private:
 
 osg::Callback* createCallback(CallbackFunction callback)
 {
-    return new detail::FuncCallback(callback);
+    return new detail::NodeCallback(callback);
+}
+
+namespace detail
+{
+class StateSetCallback : public osg::StateSet::Callback
+{
+public:
+    StateSetCallback(StateSetCallbackFunction func) : _func(func) {}
+
+    void operator()(osg::StateSet* object, osg::NodeVisitor* data) override
+    {
+        _func(object, data);
+    }
+
+private:
+    StateSetCallbackFunction _func;
+};
+}
+
+void* createStateSetCallback(StateSetCallbackFunction func)
+{
+    auto callback = new detail::StateSetCallback(func);
+    return callback;
 }
 
 osg::Callback* createTimerUpdateCallback(double time, CallbackFunction callback)
