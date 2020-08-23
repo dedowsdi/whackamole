@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <iomanip>
+#include <algorithm>
 
 #include <osg/AlphaFunc>
 #include <osg/AnimationPath>
@@ -1156,6 +1157,97 @@ void Game::createPool()
         });
         _refractRttCamera->setPostDrawCallback(
             static_cast<osg::Camera::DrawCallback*>(callback));
+    }
+
+    auto cullByPool = sgc.getBool("pool.rtt.frustum.cullByPool");
+
+    if (cullByPool)
+    {
+        // use pool points and camera point to create extra cull planes, we are not
+        // interested with node outside of pool fragment
+        auto cullPoolCallback =
+            osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+                auto cv = data->asNodeVisitor()->asCullVisitor();
+                const auto& projMatrix = *cv->getProjectionMatrix();
+                const auto& viewMatrix = *cv->getModelViewMatrix();
+                auto viewProjMatrix = viewMatrix * projMatrix;
+
+                // get min max ndc xy of pool corners
+                auto p0 = osg::Vec3(-radius, -radius, top) * viewProjMatrix;
+                auto p1 = osg::Vec3(radius, -radius, top) * viewProjMatrix;
+                auto p2 = osg::Vec3(radius, radius, top) * viewProjMatrix;
+                auto p3 = osg::Vec3(-radius, radius, top) * viewProjMatrix;
+                auto mmx = std::minmax({p0.x(), p1.x(), p2.x(), p3.x()});
+                auto mmy = std::minmax({p0.y(), p1.y(), p2.y(), p3.y()});
+                auto minX = clamp(mmx.first, -1.0f, 1.0f);
+                auto maxX = clamp(mmx.second, -1.0f, 1.0f);
+                auto minY = clamp(mmy.first, -1.0f, 1.0f);
+                auto maxY = clamp(mmy.second, -1.0f, 1.0f);
+
+                // if (cv->getFrameStamp()->getFrameNumber() % 120 == 0)
+                // {
+                //     OSG_NOTICE << minX << "," << maxX << std::endl;
+                //     OSG_NOTICE << minY << "," << maxY << std::endl;
+                // }
+
+                // We change projection CullintSet here, so it can be applied to all
+                // child Transfrom node.
+                auto& poly = cv->getProjectionCullingStack().back().getFrustum();
+
+                auto left = osg::Plane(1, 0, 0, -minX);
+                left.transformProvidingInverse(projMatrix);
+                poly.add(left);
+
+                auto right = osg::Plane(-1, 0, 0, maxX);
+                right.transformProvidingInverse(projMatrix);
+                poly.add(right);
+
+                auto bottom = osg::Plane(0, 1, 0, -minY);
+                bottom.transformProvidingInverse(projMatrix);
+                poly.add(bottom);
+
+                auto top = osg::Plane(0, -1, 0, maxY);
+                top.transformProvidingInverse(projMatrix);
+                poly.add(top);
+
+                // Change current CullingSet by applying viewMatrix
+                auto& cpoly = cv->getCurrentCullingSet().getFrustum();
+
+                left.transformProvidingInverse(viewMatrix);
+                cpoly.add(left);
+
+                right.transformProvidingInverse(viewMatrix);
+                cpoly.add(right);
+
+                bottom.transformProvidingInverse(viewMatrix);
+                cpoly.add(bottom);
+
+                top.transformProvidingInverse(viewMatrix);
+                cpoly.add(top);
+            });
+
+        _reflectRttCamera->addCullCallback(cullPoolCallback);
+        _refractRttCamera->addCullCallback(cullPoolCallback);
+
+        // debug test
+        // auto sphere = osgf::createSphereAt(osg::Vec3(100, 100, 100), 50);
+        // _reflectRttCamera->addChild(sphere);
+
+        // auto debugCallback = osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+        //     auto cv = data->asNodeVisitor()->asCullVisitor();
+        //     auto& poly = cv->getCurrentCullingSet().getFrustum();
+        //     const auto& top = poly.getPlaneList().back();
+        //     if (cv->getFrameStamp()->getFrameNumber() % 120 == 0)
+        //     {
+        //         OSG_NOTICE << poly.getPlaneList().size() << std::endl;
+        //         OSG_NOTICE << top << std::endl;
+        //         OSG_NOTICE << top.distance(sphere->getBound().center()) << std::endl;
+        //         OSG_NOTICE << top.intersect(sphere->getBound()) << std::endl;
+        //         OSG_NOTICE << "-----------" << std::endl;
+        //     }
+        // });
+
+        // sphere->setCullCallback(debugCallback);
     }
 
     // add pool. The pool it self should only be rended by main camera.

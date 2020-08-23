@@ -133,6 +133,11 @@ void BaseGame::debugDrawLine(const osg::Vec3& from, const osg::Vec3& to,
         _debugLines->setUseVertexBufferObjects(true);
         _debugLines->addPrimitiveSet(new osg::DrawArrays(GL_LINES, 0, 0));
 
+        auto ss = _debugLines->getOrCreateStateSet();
+        ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+        ss->setRenderBinDetails(999, "RenderBin");
+
         _debugRoot->addChild(_debugLines);
     }
 
