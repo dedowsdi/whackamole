@@ -304,7 +304,6 @@ private:
     osg::ref_ptr<osgTerrain::Terrain> _terrain;
     std::vector<osg::Group*> _tileGroups ;
 
-    osg::ref_ptr<osg::Geometry> _pool;
     osg::ref_ptr<osg::Texture2D> _reflectMap;
     osg::ref_ptr<osg::Texture2D> _refractMap;
     osg::ref_ptr<osg::Texture2D> _depthMap;

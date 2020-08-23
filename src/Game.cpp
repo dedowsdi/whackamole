@@ -42,6 +42,7 @@
 #include <osgUtil/TangentSpaceGenerator>
 #include <osgUtil/Tessellator>
 #include <osgViewer/Viewer>
+#include <osg/OcclusionQueryNode>
 
 #include <ALBuffer.h>
 #include <ALSource.h>
@@ -1292,26 +1293,27 @@ void Game::createPool()
         // sphere->setCullCallback(debugCallback);
     }
 
-    // add pool. The pool it self should only be rended by main camera.
-    _pool = osg::createTexturedQuadGeometry(osg::Vec3(-radius, -radius, top),
-        osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
-    _pool->setName("Pool");
-    _pool->setNodeMask(nb_visible);
-    _pool->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+    // add poolGeom
+    auto pool = new osg::OcclusionQueryNode;
+    pool->setNodeMask(nb_visible);
+    // traverse rtt camera if OcclusionQuery passed. Rtt camera is not in the scene, I don't
+    // want them to affect update and event traversal.
+    pool->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
-        // unlike other nodes, drawable cull callback is always called, it's done before
-        // cull test.
-        if (!visitor->isCulled(*obj->asDrawable()))
-        {
-            // Note, current StateSet is inherited by rtt camera, this might cause problem.
-            _reflectRttCamera->accept(*visitor);
-            _refractRttCamera->accept(*visitor);
-        }
+        // Note, current StateSet is inherited by rtt camera, this might cause
+        // problem.
+        _reflectRttCamera->accept(*visitor);
+        _refractRttCamera->accept(*visitor);
     }));
-    _sceneRoot->addChild(_pool);
+    _sceneRoot->addChild(pool);
 
-    auto ss = _pool->getOrCreateStateSet();
+    auto poolGeom = osg::createTexturedQuadGeometry(osg::Vec3(-radius, -radius, top),
+        osg::Vec3(radius * 2, 0, 0), osg::Vec3(0, radius * 2, 0));
+    poolGeom->setName("Pool");
+    auto ss = poolGeom->getOrCreateStateSet();
     ss->setAttributeAndModes(createProgram("shader/pool.vert", "shader/pool.frag"));
+
+    pool->addChild(poolGeom);
 
     // alpha blend is used to soft edge
     ss->setAttributeAndModes(
