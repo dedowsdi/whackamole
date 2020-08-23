@@ -635,6 +635,9 @@ void Game::restart()
 
     createLights();
 
+    if (sgc.getBool("scene.wind"))
+        createWinds();
+
     if (_shadowMap)
     {
         _shadowMap->setProjectionSize(sgc.getVec2("scene.shadow.projectionSize"));
@@ -886,6 +889,7 @@ void Game::clear()
     _sceneRoot->setUpdateCallback(0);
     _sceneRoot->setCullCallback(0);
     _sceneRoot->setEventCallback(0);
+    _winds.clear();
 
     _removeMoleCallbacks.clear();
 }
@@ -1440,7 +1444,7 @@ void Game::createTrees()
         ++count;
     }
 
-    OSG_NOTICE << "Add " << count << " trees" << std::endl;
+    OSG_NOTICE << "Create " << count << " trees" << std::endl;
 
     // apply winds
     auto windSize = sgc.getVec4("tree.wind.size");
@@ -1451,18 +1455,25 @@ void Game::createTrees()
     leafStateSet->addUniform(windSizeUniform);
     trunkStateSet->addUniform(windSizeUniform);
 
-    auto updateWind =
-        osgf::createStateSetCallback([=](osg::StateSet* obj, osg::NodeVisitor* data) {
-            auto maxStrength = 0.000001f;
-            for (auto& wind: _winds)
-            {
-                maxStrength = std::max(wind.getSpeed() * wind.getStrength(), maxStrength);
-            }
-            windSizeUniform->set(osg::Vec4(windSize.x(),
-                windSize.y() * meanStrength / maxStrength, windSize.z(), windSize.w()));
-        });
-    leafStateSet->setUpdateCallback(static_cast<osg::StateSet::Callback*>(updateWind));
-    trunkStateSet->setUpdateCallback(static_cast<osg::StateSet::Callback*>(updateWind));
+    if (!_winds.empty())
+    {
+        auto updateWind =
+            osgf::createStateSetCallback([=](osg::StateSet* obj, osg::NodeVisitor* data) {
+                auto maxStrength = 0.000001f;
+                for (auto& wind: _winds)
+                {
+                    maxStrength =
+                        std::max(wind.getSpeed() * wind.getStrength(), maxStrength);
+                }
+                windSizeUniform->set(osg::Vec4(windSize.x(),
+                    windSize.y() * meanStrength / maxStrength, windSize.z(), windSize.w()));
+            });
+
+        leafStateSet->setDefine("WIND");
+        leafStateSet->setUpdateCallback(static_cast<osg::StateSet::Callback*>(updateWind));
+        trunkStateSet->setDefine("WIND");
+        trunkStateSet->setUpdateCallback(static_cast<osg::StateSet::Callback*>(updateWind));
+    }
 }
 
 void Game::createRocks()
@@ -1864,15 +1875,17 @@ void Game::createMeadow()
         }
     }
 
-    _winds.resize(sgc.getInt("wind.count"));
-    _sceneRoot->addUpdateCallback(
-        osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
-            for (auto i = 0; i < _winds.size(); ++i)
-            {
-                _winds[i].update(sgg.getDeltaTime());
-                _winds[i].updateUniform(*ss, i);
-            }
-        }));
+    if (!_winds.empty())
+    {
+        ss->setDefine("NUM_WINDS", 2);
+        _sceneRoot->addUpdateCallback(
+            osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+                for (auto i = 0; i < _winds.size(); ++i)
+                {
+                    _winds[i].updateUniform(*ss, i);
+                }
+            }));
+    }
 }
 
 class MoleSpawner : public osg::Callback
@@ -1964,6 +1977,18 @@ void Game::createLights()
     {
         _shadowMap->setLight(light1);
     }
+}
+
+void Game::createWinds()
+{
+    _winds.resize(sgc.getInt("wind.count"));
+    _sceneRoot->addUpdateCallback(
+        osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
+            for (auto& wind: _winds)
+            {
+                wind.update(sgg.getDeltaTime());
+            }
+        }));
 }
 
 void Game::setupCameraAndManipulator()

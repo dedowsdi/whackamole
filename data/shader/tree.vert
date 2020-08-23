@@ -2,6 +2,7 @@
 
 // adapted from http://www.evolved-software.com/shaders/lighting
 
+#pragma import_defines(WIND)
 #pragma import_defines(FLUTTER)
 #pragma import_defines(CAST_SHADOW)
 
@@ -55,8 +56,13 @@ vec3 applyWind(vec3 vertex) {
 
 void main(void)
 {
+#ifdef WIND
     vec3 pos = gl_Vertex.xyz + applyWind(gl_Vertex.xyz / gl_Vertex.w);
     vertex = (gl_ModelViewMatrix * vec4(pos, 1)).xyz;
+#else
+    vertex = (gl_ModelViewMatrix * gl_Vertex).xyz;
+#endif
+
     gl_Position = gl_ProjectionMatrix * vec4(vertex, 1);
     gl_TexCoord[0] = gl_MultiTexCoord0;
 

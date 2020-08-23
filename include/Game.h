@@ -242,6 +242,8 @@ private:
 
     void createLights();
 
+    void createWinds();
+
     void setupCameraAndManipulator();
 
     Burrow createBurrow(const osg::Vec3& pos, const osg::Vec3& normal);
