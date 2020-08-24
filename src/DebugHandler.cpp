@@ -520,7 +520,8 @@ void RenderStagePrinter::printStateset(const osg::StateSet* ss)
         if (type == osg::StateAttribute::PROGRAM)
         {
             auto prg = static_cast<const osg::Program*>(iter->second.first.get());
-            // this will change State define str, it should not matter.
+            // this will change State define str, it should not matter. This is not
+            // reliable, you won't see the same handle in apitrace?
             auto pcp = prg->getPCP(const_cast<osg::State&>(*_renderInfo->getState()));
             _out << " {" << pcp->getHandle() << "}" << std::endl;
         }

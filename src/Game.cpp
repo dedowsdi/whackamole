@@ -889,7 +889,12 @@ void Game::clear()
 
     if (_shadowMap)
     {
-        _observer->addResource(*_shadowMap->getProgram());
+        auto prg = _shadowMap->getProgram();
+        // it's empty in 1st frame
+        if (prg)
+        {
+            _observer->addResource(*_shadowMap->getProgram());
+        }
     }
 
 #endif
@@ -1512,7 +1517,7 @@ void Game::createRocks()
         {
             auto& leaf = dynamic_cast<osg::Geode&>(*rocks.getChild(i));
             auto& geom = dynamic_cast<osg::Geometry&>(*leaf.getChild(0));
-            geom.setName("Rock");
+            geom.setName("Rock" + std::to_string(i));
             tsg->generate(&geom);
             geom.setTexCoordArray(1, tsg->getTangentArray());
 
