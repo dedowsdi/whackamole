@@ -1244,6 +1244,7 @@ void Game::createPool()
                 // We change projection CullintSet here, so it can be applied to all
                 // child Transfrom node.
                 auto& poly = cv->getProjectionCullingStack().back().getFrustum();
+                poly.clear();
 
                 auto left = osg::Plane(1, 0, 0, -minX);
                 left.transformProvidingInverse(projMatrix);
@@ -1263,6 +1264,7 @@ void Game::createPool()
 
                 // Change current CullingSet by applying viewMatrix
                 auto& cpoly = cv->getCurrentCullingSet().getFrustum();
+                cpoly.clear();
 
                 left.transformProvidingInverse(viewMatrix);
                 cpoly.add(left);
