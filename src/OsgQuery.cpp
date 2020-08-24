@@ -210,4 +210,19 @@ osg::Vec2i getScreenSize(int identifier)
     return osg::Vec2i(width, height);
 }
 
+osg::ref_ptr<osgUtil::LineSegmentIntersector> pickNearest(
+    osg::Camera& camera, float x, float y, int traversalMask)
+{
+    auto picker = new osgUtil::LineSegmentIntersector(osgUtil::Intersector::WINDOW, x, y);
+    picker->setIntersectionLimit(osgUtil::Intersector::LIMIT_NEAREST);
+
+    osgUtil::IntersectionVisitor iv;
+    iv.setTraversalMask(traversalMask);
+    iv.setIntersector(picker);
+
+    camera.accept(iv);
+
+    return picker;
+}
+
 }  // namespace osgq

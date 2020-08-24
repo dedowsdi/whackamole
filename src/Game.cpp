@@ -133,7 +133,7 @@ void Wind::mutate()
 class GameEventHandler : public osgGA::GUIEventHandler
 {
 public:
-    GameEventHandler() {}
+    GameEventHandler(int framesPerPick) : _framesPerPick(framesPerPick) {}
 
     virtual bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
     {
@@ -141,10 +141,14 @@ public:
         {
             case osgGA::GUIEventAdapter::FRAME:
             {
-                auto mole = getCursorMole(ea);
-                sgg.highlightMole(mole);
                 sgg.moveCursor(ea.getX(), ea.getY());
-                sgg.flashCursor(mole != 0);
+                auto view = aa.asView();
+                if (view->getFrameStamp()->getFrameNumber() % 4 == 0)
+                {
+                    auto mole = getCursorMole(ea);
+                    sgg.highlightMole(mole);
+                    sgg.flashCursor(mole != 0);
+                }
             }
             break;
 
@@ -206,19 +210,23 @@ public:
 private:
     Mole* getCursorMole(const osgGA::GUIEventAdapter& ea)
     {
-        osgUtil::LineSegmentIntersector::Intersections iss;
-        if (!sgg.getViewer()->computeIntersections(ea, iss, nb_raytest))
+        auto picker = osgq::pickNearest(*sgg.getViewer()->getCamera(), ea.getX(), ea.getY(), nb_raytest);
+        auto& intersections = picker->getIntersections();
+        if (intersections.empty())
+        {
             return 0;
+        }
 
-        // intersections are sorted by ratio, 1st one is the nearest. Don't use
-        // LIMIT_NEAREST, it's used for bounding sphere intersection test.
-        auto& np = iss.begin()->nodePath;
+        // intersections are sorted by ratio, first one is nearest
+        auto& np = intersections.begin()->nodePath;
         auto iter = std::find_if(np.begin(), np.end(), [](osg::Node* node) -> bool {
             return node->getName().find_first_of("Mole") == 0 && dynamic_cast<Mole*>(node);
         });
 
         return iter == np.end() ? 0 : static_cast<Mole*>(*iter);
     }
+
+    int _framesPerPick = 4;
 };
 
 osg::ref_ptr<osg::Node> Mole::_model;
@@ -426,7 +434,7 @@ void Game::createScene()
     }
 
     _root->addUpdateCallback(this);
-    _root->addEventCallback(new GameEventHandler);
+    _root->addEventCallback(new GameEventHandler(sgc.getInt("scene.pick.frames")));
 
     osgUtil::PerlinNoise pn;
     _noiseTexture3D = pn.create3DNoiseTexture(sgc.getInt("starfield.sky.texture.size"));

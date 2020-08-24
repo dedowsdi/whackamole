@@ -46,6 +46,11 @@ namespace osgTerrain
 class Terrain;
 }
 
+namespace osgUtil
+{
+class LineSegmentIntersector;
+}
+
 namespace osgq
 {
 
@@ -82,6 +87,9 @@ const void* getGraphicsContextTraits(const osgViewer::Viewer& viewer);
 osg::Vec4i getWindowRect(const osgViewer::Viewer& viewer);
 
 osg::Vec2i getScreenSize(int identifier = 0);
+
+osg::ref_ptr<osgUtil::LineSegmentIntersector> pickNearest(
+    osg::Camera& camera, float x, float y, int traversalMask = -1);
 
 }  // namespace osgq
 
