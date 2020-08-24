@@ -1309,13 +1309,13 @@ void Game::createPool()
     // traverse rtt camera if OcclusionQuery passed. Rtt camera is not in the scene, I don't
     // want them to affect update and event traversal. If it's far away, it's only travered
     // once per certain frames.
-    auto distance = sgc.getFloat("pool.distance");
-    auto frames = sgc.getInt("pool.rtt.frames");
+    auto near = sgc.getFloat("pool.near");
+    auto farFrames = sgc.getInt("pool.rtt.farFrames");
     pool->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
         auto eye = visitor->getEyePoint();
-        if (eye.length() > distance &&
-            visitor->getFrameStamp()->getFrameNumber() % frames != 0)
+        if (eye.length() > near &&
+            visitor->getFrameStamp()->getFrameNumber() % farFrames != 0)
         {
             return;
         }
@@ -1631,8 +1631,9 @@ class SortByDepth : public osg::Callback
 public:
     SortByDepth()
     {
-        _maxDistance = sgc.getFloat("meadow.group.sort.maxDistance");
-        _sortFrames = sgc.getFloat("meadow.group.sort.frames");
+        _near = sgc.getFloat("meadow.sort.near");
+        _sortFarFrames = sgc.getFloat("meadow.sort.farFrames");
+        _sortNearFrames = sgc.getFloat("meadow.sort.nearFrames");
     }
 
     bool run(osg::Object* object, osg::Object* data) override
@@ -1651,8 +1652,15 @@ public:
 
         auto ev = eyeLocal - leaf->getBound().center();
 
-        if (cv->getFrameStamp()->getFrameNumber() % _sortFrames != 0 &&
-            ev.length() > _maxDistance)
+        // far check
+        auto frameNumber = cv->getFrameStamp()->getFrameNumber();
+        if (frameNumber % _sortFarFrames != 0 && ev.length() > _near)
+        {
+            return traverse(object, data);
+        }
+
+        // near check
+        if (frameNumber % _sortNearFrames != 0)
         {
             return traverse(object, data);
         }
@@ -1671,8 +1679,9 @@ public:
     }
 
 private:
-    float _maxDistance = 1024;
-    int _sortFrames = 8;
+    float _near = 1024;
+    int _sortFarFrames = 8;
+    int _sortNearFrames = 2;
 };
 
 void Game::createMeadow()
