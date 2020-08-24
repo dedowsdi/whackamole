@@ -855,6 +855,13 @@ osg::Vec3 Game::getTerrainNormal(float x, float y)
 {
     auto col = (x - _terrainOrigin.x()) / _tileSize;
     auto row = (y - _terrainOrigin.y()) / _tileSize;
+    auto ndcX = col - std::floor(col);
+    auto ndcY = row - std::floor(row);
+    if (ndcX == 0 && col >= 1)
+        --col;
+    if (ndcY == 0 && row >= 1)
+        --row;
+
     auto tile = _terrain->getTile(osgTerrain::TileID(0, col, row));
     if (!tile)
     {
@@ -865,11 +872,12 @@ osg::Vec3 Game::getTerrainNormal(float x, float y)
     auto layer = static_cast<osgTerrain::HeightFieldLayer*>(tile->getElevationLayer());
     auto heightField = layer->getHeightField();
 
-    auto ndcX = col - std::floor(col);
-    auto ndcY = row - std::floor(row);
-    auto i = std::round(heightField->getNumColumns() * ndcX);
-    auto j = std::round(heightField->getNumRows() * ndcY);
-    return heightField->getNormal(i, j);
+    auto normal =  heightField->getNormal(col, row);
+    if (normal == osg::Vec3())
+    {
+        OSG_WARN << "Found 0 terrain normal " << std::endl;
+    }
+    return normal;
 }
 
 Game::Game() {}
