@@ -87,13 +87,15 @@ void emit_vertex(vec3 pos, vec2 tc)
         pos += applyExplosions(pos) + applyWinds(pos);
     }
 
+    gl_TexCoord[0].xy = tc;
 #ifdef SHADOWED_SCENE
     vertex = (gl_ModelViewMatrix * vec4(pos, 1)).xyz;
     normal = gl_NormalMatrix * vec3(0, 0, 1);
+    gl_Position = gl_ProjectionMatrix * vec4(vertex, 1);
+#else
+    gl_Position = gl_ModelViewProjectionMatrix * vec4(pos, 1);
 #endif
 
-    gl_TexCoord[0].xy = tc;
-    gl_Position = gl_ProjectionMatrix * vec4(vertex, 1);
     EmitVertex();
 }
 
