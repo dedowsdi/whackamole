@@ -1307,9 +1307,19 @@ void Game::createPool()
     auto pool = new osg::OcclusionQueryNode;
     pool->setNodeMask(nb_visible);
     // traverse rtt camera if OcclusionQuery passed. Rtt camera is not in the scene, I don't
-    // want them to affect update and event traversal.
+    // want them to affect update and event traversal. If it's far away, it's only travered
+    // once per certain frames.
+    auto distance = sgc.getFloat("pool.distance");
+    auto frames = sgc.getInt("pool.rtt.frames");
     pool->addCullCallback(osgf::createCallback([=](osg::Object* obj, osg::Object* data) {
         auto visitor = data->asNodeVisitor()->asCullVisitor();
+        auto eye = visitor->getEyePoint();
+        if (eye.length() > distance &&
+            visitor->getFrameStamp()->getFrameNumber() % frames != 0)
+        {
+            return;
+        }
+
         // Note, current StateSet is inherited by rtt camera, this might cause
         // problem.
         _reflectRttCamera->accept(*visitor);
@@ -1853,7 +1863,6 @@ void Game::createMeadow()
     ss->setDefine("MAX_EXPLOSIONS", std::to_string(maxExplosions));
     ss->setDefine("EXPLOSION_RADIUS", std::to_string(explosionRadius));
 
-    // sort by depth, only done for main camera.
     _explosions.assign(maxExplosions, osg::Vec4());
 
     // update explosions only for main camera cull traversal
